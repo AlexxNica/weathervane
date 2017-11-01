@@ -133,9 +133,11 @@ runAndLog($fileout, "rm -rf ./dockerImages/nginx/html");
 runAndLog($fileout, "mkdir ./dockerImages/nginx/html");
 runAndLog($fileout, "cp ./dist/auctionWeb.tgz ./dockerImages/nginx/html/");
 runAndLog($fileout, "cd ./dockerImages/nginx/html; tar zxf auctionWeb.tgz; rm -f auctionWeb.tgz");
+
 # configurationManager
 runAndLog($fileout, "rm -f ./dockerImages/configurationManager/auctionConfigManager.jar");
 runAndLog($fileout, "cp ./dist/auctionConfigManager.jar ./dockerImages/configurationManager/auctionConfigManager.jar");
+
 # tomcat
 runAndLog($fileout, "rm -rf ./dockerImages/tomcat/apache-tomcat-auction1/webapps");
 runAndLog($fileout, "mkdir ./dockerImages/tomcat/apache-tomcat-auction1/webapps");
@@ -147,6 +149,11 @@ runAndLog($fileout, "cd ./dockerImages/tomcat/apache-tomcat-auction1/webapps/auc
 runAndLog($fileout, "cp ./dist/auctionWeb.war ./dockerImages/tomcat/apache-tomcat-auction1/webapps/auctionWeb/");
 runAndLog($fileout, "cd ./dockerImages/tomcat/apache-tomcat-auction1/webapps/auctionWeb; jar xf auctionWeb.war; rm -f auctionWeb.war");
 
+# data manager
+runAndLog($fileout, "rm -f ./dockerImages/auctionDataManager/dbLoader.jar");
+runAndLog($fileout, "rm -rf ./dockerImages/auctionDataManager/dbLoaderLibs");
+runAndLog($fileout, "cp ./dist/dbLoader.jar ./dockerImages/auctionDataManager/dbLoader.jar");
+runAndLog($fileout, "cp -r ./dist/dbLoaderLibs ./dockerImages/auctionDataManager/dbLoaderLibs");
 
 my $version = `cat version.txt`;
 chomp($version);
