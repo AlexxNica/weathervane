@@ -60,7 +60,7 @@ override 'run' => sub {
 
 	## stop the services
 	my @tiers = qw(frontend backend data infrastructure);
-	callMethodOnObjectsParamListParallel1( "stopServices", [$self], \@tiers, $cleanupLogDir );
+	callMethodOnObjectsParamListParallel1( "stopServices", [$self], \@tiers, $tmpDir );
 
 	$debug_logger->debug("Unregister port numbers");
 	$self->unRegisterPortNumbers();
