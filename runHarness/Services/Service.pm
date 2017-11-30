@@ -340,6 +340,12 @@ sub start {
 		$service->startInstance($logPath);
 	}
 
+
+	foreach my $service (@$servicesRef) {
+		$logger->debug( "configureAfterStart " . $service->getDockerName() . "\n" );
+		$service->configureAfterStart($logPath);
+	}
+	
 	sleep 15;
 	
 }
@@ -386,6 +392,11 @@ sub stop {
 
 sub remove {
 	my ($self)            = @_;
+
+}
+
+sub configureAfterStart {
+	my ($self, $logPath)            = @_;
 
 }
 

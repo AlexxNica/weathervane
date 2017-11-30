@@ -76,9 +76,10 @@ sub prepareData {
 		"Configuring and starting data services for appInstance $appInstanceNum of workload $workloadNum.\n" );
 	$logger->debug("prepareData users = $users, logPath = $logPath");
 
-
-	# The data services must be started for checking whether the data is loaded
+	# Start the data services
 	if ($reloadDb) {
+		# Avoid an extra stop/start cycle for the data services since we know
+		# we are reloading the data
 		$appInstance->clearDataServicesBeforeStart($logPath);
 	}
 	$appInstance->startServices("data", $logPath);
@@ -97,6 +98,12 @@ sub prepareData {
 	}
 	$logger->debug( "All data services are up for appInstance $appInstanceNum of workload $workloadNum." );
 
+	# Calculate the values for the environment variables used by the auctiondatamanager container
+	my %envVarMap;
+	$envVarMap{"USERSPERAUCTIONSCALEFACTOR"} = $self->getParamValue('usersPerAuctionScaleFactor');
+	
+
+		
 	my $loadedData = 0;
 	if ($reloadDb) {
 		$appInstance->clearDataServicesAfterStart($logPath);
@@ -642,217 +649,6 @@ sub loadData {
 		$auctions = ceil( $users / $self->getParamValue('usersPerAuctionScaleFactor') );
 	}
 
-	my $nosqlServersRef = $appInstance->getActiveServicesByType('nosqlServer');
-	my $cmdout;
-	my $replicaMasterHostname = "";
-	my $replicaMasterPort = "";
-	if (   ( $appInstance->numNosqlShards > 0 )
-		&& ( $appInstance->numNosqlReplicas > 0 ) )
-	{
-		$console_logger->( "Loading data in sharded and replicated mongo is not supported yet" );
-		return 0;
-	}
-	elsif ( $appInstance->numNosqlShards > 0 ) {
-		print $applog "Sharding MongoDB\n";
-		my $localPort = $self->portMap->{'mongos'};
-		my $cmdString;
-
-		# Add the shards to the database
-		foreach my $nosqlServer (@$nosqlServersRef) {
-			my $hostname = $nosqlServer->getIpAddr();
-			my $port     = $nosqlServer->portMap->{'mongod'};
-			print $applog "Add $hostname as shard.\n";
-			$cmdString = "mongo --port $localPort --eval 'printjson(sh.addShard(\\\"$hostname:$port\\\"))'";
-			my $cmdout = `$sshConnectString \"$cmdString\"`;
-			print $applog "$sshConnectString \"$cmdString\"\n";
-			print $applog $cmdout;
-		}
-
-		# enable sharding for the databases
-
-		print $applog "Enabling sharding for auction database.\n";
-		$cmdString = "mongo --port $localPort --eval 'printjson(sh.enableSharding(\\\"auction\\\"))'";
-		my $cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Enabling sharding for bid database.\n";
-		$cmdString = "mongo --port $localPort --eval 'printjson(sh.enableSharding(\\\"bid\\\"))'";
-		$cmdout    = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Enabling sharding for attendanceRecord database.\n";
-		$cmdString = "mongo --port $localPort --eval 'printjson(sh.enableSharding(\\\"attendanceRecord\\\"))'";
-		$cmdout    = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Enabling sharding for imageInfo database.\n";
-		$cmdString = "mongo --port $localPort --eval 'printjson(sh.enableSharding(\\\"imageInfo\\\"))'";
-		$cmdout    = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Enabling sharding for auctionFullImages database.\n";
-		$cmdString = "mongo --port $localPort --eval 'printjson(sh.enableSharding(\\\"auctionFullImages\\\"))'";
-		$cmdout    = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Enabling sharding for auctionPreviewImages database.\n";
-		$cmdString = "mongo --port $localPort --eval 'printjson(sh.enableSharding(\\\"auctionPreviewImages\\\"))'";
-		$cmdout    = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Enabling sharding for auctionThumbnailImages database.\n";
-		$cmdString = "mongo --port $localPort --eval 'printjson(sh.enableSharding(\\\"auctionThumbnailImages\\\"))'";
-		$cmdout    = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-
-		# Create indexes for collections
-		print $applog "Adding hashed index for userId in attendanceRecord Collection.\n";
-		$cmdString =
-"mongo --port $localPort attendanceRecord --eval 'printjson(db.attendanceRecord.ensureIndex({userId : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Adding hashed index for bidderId in bid Collection.\n";
-		$cmdString = "mongo --port $localPort bid --eval 'printjson(db.bid.ensureIndex({bidderId : \\\"hashed\\\"}))'";
-		$cmdout    = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Adding hashed index for entityid in imageInfo Collection.\n";
-		$cmdString =
-		  "mongo --port $localPort imageInfo --eval 'printjson(db.imageInfo.ensureIndex({entityid : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Adding hashed index for imageid in imageFull Collection.\n";
-		$cmdString =
-"mongo --port $localPort auctionFullImages --eval 'printjson(db.imageFull.ensureIndex({imageid : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Adding hashed index for imageid in imagePreview Collection.\n";
-		$cmdString =
-"mongo --port $localPort auctionPreviewImages --eval 'printjson(db.imagePreview.ensureIndex({imageid : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Adding hashed index for imageid in imageThumbnail Collection.\n";
-		$cmdString =
-"mongo --port $localPort auctionThumbnailImages --eval 'printjson(db.imageThumbnail.ensureIndex({imageid : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-
-		# shard the collections
-		print $applog "Sharding attendanceRecord collection on hashed userId.\n";
-		$cmdString =
-"mongo --port $localPort --eval 'printjson(sh.shardCollection(\\\"attendanceRecord.attendanceRecord\\\", {\\\"userId\\\" : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Sharding bid collection on hashed bidderId.\n";
-		$cmdString =
-"mongo --port $localPort --eval 'printjson(sh.shardCollection(\\\"bid.bid\\\",{\\\"bidderId\\\" : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Sharding imageInfo collection on hashed entityid.\n";
-		$cmdString =
-"mongo --port $localPort --eval 'printjson(sh.shardCollection(\\\"imageInfo.imageInfo\\\",{\\\"entityid\\\" : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Sharding imageFull collection on hashed imageid.\n";
-		$cmdString =
-"mongo --port $localPort --eval 'printjson(sh.shardCollection(\\\"auctionFullImages.imageFull\\\",{\\\"imageid\\\" : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Sharding imagePreview collection on hashed imageid.\n";
-		$cmdString =
-"mongo --port $localPort --eval 'printjson(sh.shardCollection(\\\"auctionPreviewImages.imagePreview\\\",{\\\"imageid\\\" : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Sharding imageThumbnail collection on hashed imageid.\n";
-		$cmdString =
-"mongo --port $localPort --eval 'printjson(sh.shardCollection(\\\"auctionThumbnailImages.imageThumbnail\\\",{\\\"imageid\\\" : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-
-		# disable the balancer
-		print $applog "Disabling the balancer.\n";
-		$cmdString = "mongo --port $localPort --eval 'printjson(sh.setBalancerState(false))'";
-		$cmdout    = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-
-	}
-	elsif ( $appInstance->numNosqlReplicas > 0 ) {
-		$logger->debug("Creating the MongoDB Replica Set");
-		print $applog "Creating the MongoDB Replica Set\n";
-		my $cmdString;
-		
-		# Create the replica set
-		foreach my $nosqlServer (@$nosqlServersRef) {
-			my $hostname = $nosqlServer->getIpAddr();
-			my $port     = $nosqlServer->portMap->{'mongod'};
-			if ( $replicaMasterHostname eq "" ) {
-				$replicaMasterHostname = $hostname;
-				$replicaMasterPort = $port;
-
-				# Initiate replica set
-				print $applog "Add $hostname as replica primary.\n";
-				my $replicaName      = "auction" . $nosqlServer->shardNum;
-				my $replicaConfig = "{_id : \"$replicaName\", members: [ { _id : 0, host : \"$replicaMasterHostname:$replicaMasterPort\" } ],}";
-				$cmdString = "mongo --host $replicaMasterHostname --port $port --eval 'printjson(rs.initiate($replicaConfig))'";				
-				$logger->debug("Add $hostname as replica primary: $cmdString");
-				$cmdout = `$cmdString`;
-				$logger->debug("Add $hostname as replica primary result : $cmdout");
-				print $applog $cmdout;
-
-				print $applog "rs.status() : \n";
-				$cmdString = "mongo --host $replicaMasterHostname --port $port --eval 'printjson(rs.status())'";
-				$cmdout = `$cmdString`;
-				$logger->debug("rs.status() : \n$cmdout");
-				print $applog $cmdout;
-
-				sleep(30);
-
-				print $applog "rs.status() after 30s: \n";
-				$cmdString = "mongo --host $replicaMasterHostname --port $port --eval 'printjson(rs.status())'";
-				$cmdout = `$cmdString`;
-				$logger->debug("rs.status() after 30s : \n$cmdout");
-				print $applog $cmdout;
-
-				sleep(30);
-
-				print $applog "rs.status() after 60s: \n";
-				$cmdString = "mongo --host $replicaMasterHostname --port $port --eval 'printjson(rs.status())'";
-				$cmdout = `$cmdString`;
-				$logger->debug("rs.status() after 60s : \n$cmdout");
-				print $applog $cmdout;
-
-			}
-			else {
-				print $applog "Add $hostname as replica secondary.\n";
-				$cmdString = "mongo --host $replicaMasterHostname --port $replicaMasterPort --eval 'printjson(rs.add(\"$hostname:$port\"))'";
-				$logger->debug("Add $hostname as replica secondary: $cmdString");
-				$cmdout = `$cmdString`;
-				$logger->debug("Add $hostname as replica secondary result : $cmdout");
-				print $applog $cmdout;
-
-				print $applog "rs.status() : \n";
-				$cmdString = "mongo --host $replicaMasterHostname --port $replicaMasterPort --eval 'printjson(rs.status())'";
-				$cmdout = `$cmdString`;
-				$logger->debug("rs.status() : \n$cmdout");
-				print $applog $cmdout;
-
-			}
-		}
-
-	}
 
 	# Load the data
 	my $dbScriptDir     = $self->getParamValue('dbScriptDir');
@@ -1052,7 +848,7 @@ sub isDataLoaded {
 	}
 	else {
 
-		# The mongos will be running on the datManager
+		# The mongos will be running on the dataManager
 		$nosqlHostname = $self->getIpAddr();
 		$mongodbPort   = $self->portMap->{'mongos'};
 	}
