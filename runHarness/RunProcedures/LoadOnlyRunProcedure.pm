@@ -20,7 +20,7 @@ use WeathervaneTypes;
 use RunResults::RunResult;
 use JSON;
 use Log::Log4perl qw(get_logger);
-use Utils qw(callMethodOnObjectsParamListParallel1 callMethodOnObjectsParallel callMethodsOnObjectParallel callMethodsOnObjectParallel1 callMethodOnObjectsParallel1);
+use Utils qw(callMethodOnObjectsParamListParallel1 callMethodOnObjectsParallel2 callMethodOnObjectsParallel callMethodsOnObjectParallel callMethodsOnObjectParallel1 callMethodOnObjectsParallel1);
 
 use Parameters qw(getParamValue setParamValue);
 
