@@ -197,7 +197,7 @@ sub stopMongodServers {
 		# stop the mongod on this host
 		print $dblog "stopping mongod on $hostname\n";
 		$logger->debug("stopping mongod on $hostname");
-		my $sshConnectString = $self->host->sshConnectString;
+		my $sshConnectString = $nosqlServer->host->sshConnectString;
 
 		my $cmdString = "$sshConnectString mongod -f /etc/mongod.conf --shutdown";
 		my $cmdOut = `$cmdString 2>&1`;
