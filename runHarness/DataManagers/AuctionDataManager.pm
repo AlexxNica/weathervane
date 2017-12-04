@@ -682,6 +682,7 @@ sub loadData {
 
 	my $nosqlHostname;
 	my $mongodbPort;
+	my $nosqlServersRef = $appInstance->getActiveServicesByType('nosqlServer');
 	if ( $appInstance->numNosqlShards == 0 ) {
 		my $nosqlService = $nosqlServersRef->[0];
 		$nosqlHostname = $nosqlService->getIpAddr();
@@ -700,9 +701,9 @@ sub loadData {
 			my $nosqlService  = $nosqlServersRef->[$i];
 			my $nosqlHostname = $nosqlService->getIpAddr();
 			my $replicaPort;
-			if ($nosqlHostname eq $replicaMasterHostname) {
+			if ($i == 0) {
 				$replicaPort = $nosqlService->internalPortMap->{'mongod'};
-				print $applog "Creating mongodbReplicaSet define.  $nosqlHostname is primary ($replicaMasterHostname), using port $replicaPort.\n";
+				print $applog "Creating mongodbReplicaSet define.  $nosqlHostname is primary ($nosqlHostname), using port $replicaPort.\n";
 				$mongodbReplicaSet .= "$nosqlHostname:$replicaPort";
 			} else {
 				$replicaPort = $nosqlService->portMap->{'mongod'};
