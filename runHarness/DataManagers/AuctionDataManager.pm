@@ -844,7 +844,7 @@ sub isDataLoaded {
 
 	my $nosqlHostname;
 	my $mongodbPort;
-	if ( $self->appInstance->numNosqlShards == 0 ) {
+	if ( $nosqlService->numNosqlShards == 0 ) {
 		$nosqlHostname = $nosqlService->getIpAddr();
 		$mongodbPort   = $nosqlService->portMap->{'mongod'};
 	}
@@ -856,7 +856,7 @@ sub isDataLoaded {
 	}
 
 	my $mongodbReplicaSet = "$nosqlHostname:$mongodbPort";
-	if ( $self->appInstance->numNosqlReplicas > 0 ) {
+	if ( $nosqlService->numNosqlReplicas > 0 ) {
 		for ( my $i = 1 ; $i <= $#{$nosqlServicesRef} ; $i++ ) {
 			my $nosqlService  = $nosqlServicesRef->[$i];
 			my $nosqlHostname = $nosqlService->getIpAddr();
