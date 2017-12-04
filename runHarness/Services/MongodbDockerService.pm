@@ -553,6 +553,7 @@ sub configure {
 sub configureAfterStart {
 	my ($self, $logPath)            = @_;
 	my $console_logger   = get_logger("Console");
+	my $logger = get_logger("Weathervane::Services::MongodbService");
 	my $name     = $self->getParamValue('dockerName');
 	my $host = $self->host;
 	my $hostname = $self->host->hostName;
@@ -590,8 +591,8 @@ sub configureAfterStart {
 			my $port     = $nosqlServer->portMap->{'mongod'};
 			print $applog "Add $hostname as shard.\n";
 			$cmdString = "mongo --port $localPort --eval 'printjson(sh.addShard(\\\"$hostname:$port\\\"))'";
-			my $cmdout = `$sshConnectString \"$cmdString\"`;
-			print $applog "$sshConnectString \"$cmdString\"\n";
+			my $cmdout = `$cmdString`;	
+			print $applog "$cmdString\n";
 			print $applog $cmdout;
 		}
 
@@ -599,120 +600,120 @@ sub configureAfterStart {
 
 		print $applog "Enabling sharding for auction database.\n";
 		$cmdString = "mongo --port $localPort --eval 'printjson(sh.enableSharding(\\\"auction\\\"))'";
-		my $cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
+		my $cmdout = `$cmdString`;	
+		print $applog "$cmdString\n";
 		print $applog $cmdout;
 		print $applog "Enabling sharding for bid database.\n";
 		$cmdString = "mongo --port $localPort --eval 'printjson(sh.enableSharding(\\\"bid\\\"))'";
-		$cmdout    = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
+		$cmdout = `$cmdString`;	
+		print $applog "$cmdString\n";
 		print $applog $cmdout;
 		print $applog "Enabling sharding for attendanceRecord database.\n";
 		$cmdString = "mongo --port $localPort --eval 'printjson(sh.enableSharding(\\\"attendanceRecord\\\"))'";
-		$cmdout    = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
+		$cmdout = `$cmdString`;	
+		print $applog "$cmdString\n";
 		print $applog $cmdout;
 		print $applog "Enabling sharding for imageInfo database.\n";
 		$cmdString = "mongo --port $localPort --eval 'printjson(sh.enableSharding(\\\"imageInfo\\\"))'";
-		$cmdout    = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
+		$cmdout = `$cmdString`;	
+		print $applog "$cmdString\n";
 		print $applog $cmdout;
 		print $applog "Enabling sharding for auctionFullImages database.\n";
 		$cmdString = "mongo --port $localPort --eval 'printjson(sh.enableSharding(\\\"auctionFullImages\\\"))'";
-		$cmdout    = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
+		$cmdout = `$cmdString`;	
+		print $applog "$cmdString\n";
 		print $applog $cmdout;
 		print $applog "Enabling sharding for auctionPreviewImages database.\n";
 		$cmdString = "mongo --port $localPort --eval 'printjson(sh.enableSharding(\\\"auctionPreviewImages\\\"))'";
-		$cmdout    = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
+		$cmdout = `$cmdString`;	
+		print $applog "$cmdString\n";
 		print $applog $cmdout;
 		print $applog "Enabling sharding for auctionThumbnailImages database.\n";
 		$cmdString = "mongo --port $localPort --eval 'printjson(sh.enableSharding(\\\"auctionThumbnailImages\\\"))'";
-		$cmdout    = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
+		$cmdout = `$cmdString`;	
+		print $applog "$cmdString\n";
 		print $applog $cmdout;
 
 		# Create indexes for collections
 		print $applog "Adding hashed index for userId in attendanceRecord Collection.\n";
 		$cmdString =
 "mongo --port $localPort attendanceRecord --eval 'printjson(db.attendanceRecord.ensureIndex({userId : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
+		$cmdout = `$cmdString`;	
+		print $applog "$cmdString\n";
 		print $applog $cmdout;
 		print $applog "Adding hashed index for bidderId in bid Collection.\n";
 		$cmdString = "mongo --port $localPort bid --eval 'printjson(db.bid.ensureIndex({bidderId : \\\"hashed\\\"}))'";
-		$cmdout    = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
+		$cmdout = `$cmdString`;	
+		print $applog "$cmdString\n";
 		print $applog $cmdout;
 		print $applog "Adding hashed index for entityid in imageInfo Collection.\n";
 		$cmdString =
 		  "mongo --port $localPort imageInfo --eval 'printjson(db.imageInfo.ensureIndex({entityid : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
+		$cmdout = `$cmdString`;	
+		print $applog "$cmdString\n";
 		print $applog $cmdout;
 		print $applog "Adding hashed index for imageid in imageFull Collection.\n";
 		$cmdString =
 "mongo --port $localPort auctionFullImages --eval 'printjson(db.imageFull.ensureIndex({imageid : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
+		$cmdout = `$cmdString`;	
+		print $applog "$cmdString\n";
 		print $applog $cmdout;
 		print $applog "Adding hashed index for imageid in imagePreview Collection.\n";
 		$cmdString =
 "mongo --port $localPort auctionPreviewImages --eval 'printjson(db.imagePreview.ensureIndex({imageid : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
+		$cmdout = `$cmdString`;	
+		print $applog "$cmdString\n";
 		print $applog $cmdout;
 		print $applog "Adding hashed index for imageid in imageThumbnail Collection.\n";
 		$cmdString =
 "mongo --port $localPort auctionThumbnailImages --eval 'printjson(db.imageThumbnail.ensureIndex({imageid : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
+		$cmdout = `$cmdString`;	
+		print $applog "$cmdString\n";
 		print $applog $cmdout;
 
 		# shard the collections
 		print $applog "Sharding attendanceRecord collection on hashed userId.\n";
 		$cmdString =
 "mongo --port $localPort --eval 'printjson(sh.shardCollection(\\\"attendanceRecord.attendanceRecord\\\", {\\\"userId\\\" : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
+		$cmdout = `$cmdString`;	
+		print $applog "$cmdString\n";
 		print $applog $cmdout;
 		print $applog "Sharding bid collection on hashed bidderId.\n";
 		$cmdString =
 "mongo --port $localPort --eval 'printjson(sh.shardCollection(\\\"bid.bid\\\",{\\\"bidderId\\\" : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
+		$cmdout = `$cmdString`;	
+		print $applog "$cmdString\n";
 		print $applog $cmdout;
 		print $applog "Sharding imageInfo collection on hashed entityid.\n";
 		$cmdString =
 "mongo --port $localPort --eval 'printjson(sh.shardCollection(\\\"imageInfo.imageInfo\\\",{\\\"entityid\\\" : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
+		$cmdout = `$cmdString`;	
+		print $applog "$cmdString\n";
 		print $applog $cmdout;
 		print $applog "Sharding imageFull collection on hashed imageid.\n";
 		$cmdString =
 "mongo --port $localPort --eval 'printjson(sh.shardCollection(\\\"auctionFullImages.imageFull\\\",{\\\"imageid\\\" : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
+		$cmdout = `$cmdString`;	
+		print $applog "$cmdString\n";
 		print $applog $cmdout;
 		print $applog "Sharding imagePreview collection on hashed imageid.\n";
 		$cmdString =
 "mongo --port $localPort --eval 'printjson(sh.shardCollection(\\\"auctionPreviewImages.imagePreview\\\",{\\\"imageid\\\" : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
+		$cmdout = `$cmdString`;	
+		print $applog "$cmdString\n";
 		print $applog $cmdout;
 		print $applog "Sharding imageThumbnail collection on hashed imageid.\n";
 		$cmdString =
 "mongo --port $localPort --eval 'printjson(sh.shardCollection(\\\"auctionThumbnailImages.imageThumbnail\\\",{\\\"imageid\\\" : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
+		$cmdout = `$cmdString`;	
+		print $applog "$cmdString\n";
 		print $applog $cmdout;
 
 		# disable the balancer
 		print $applog "Disabling the balancer.\n";
 		$cmdString = "mongo --port $localPort --eval 'printjson(sh.setBalancerState(false))'";
-		$cmdout    = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
+		$cmdout = `$cmdString`;	
+		print $applog "$cmdString\n";
 		print $applog $cmdout;
 
 	}
