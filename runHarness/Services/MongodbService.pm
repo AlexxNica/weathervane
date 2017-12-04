@@ -358,6 +358,7 @@ sub stopSingleMongodb {
 override 'start' => sub {
 	my ($self, $serviceType, $users, $logPath)            = @_;
 	my $logger = get_logger("Weathervane::Services::MongodbService");
+	my $console_logger   = get_logger("Console");
 	my $logName     = "$logPath/StartMongodb.log";
 	
 	$logger->debug("MongoDB Start");
@@ -371,7 +372,7 @@ override 'start' => sub {
 	my $replicasPerShard = $self->getParamValue('nosqlReplicasPerShard');
 	my $sharded          = $self->getParamValue('nosqlSharded');
 	my $replicated       = $self->getParamValue('nosqlReplicated');
-	my $numNosqlServers = $appInstance->getNumActiveOfServiceType('nosqlServer');
+	my $numNosqlServers = $self->appInstance->getNumActiveOfServiceType('nosqlServer');
 
 	# Determine the number of shards and replicas-per-shard
 	my $numNosqlShards = 0;
@@ -387,7 +388,7 @@ override 'start' => sub {
 			}
 			$numNosqlShards = $numNosqlServers;
 			$logger->debug("MongoDB Start.  MongoDB is sharded with $numNosqlShards shards");
-			print $dbLog "MongoDB Start.  MongoDB is sharded with $numNosqlShards shards";
+			print $dblog "MongoDB Start.  MongoDB is sharded with $numNosqlShards shards";
 		}
 	}
 	elsif ($replicated) {
@@ -399,7 +400,7 @@ override 'start' => sub {
 		}
 		$numNosqlReplicas = $numNosqlServers / $replicasPerShard ;
 		$logger->debug("MongoDB Start.  MongoDB is replicated with $numNosqlReplicas replicas");
-		print $dbLog "MongoDB Start.  MongoDB is replicated with $numNosqlReplicas replicas";
+		print $dblog "MongoDB Start.  MongoDB is replicated with $numNosqlReplicas replicas";
 	}
 	else {
 		if ( $numNosqlServers > 1 ) {
@@ -409,11 +410,11 @@ override 'start' => sub {
 			exit(-1);
 		}
 		$logger->debug("MongoDB Start.  MongoDB is not sharded or replicated.");
-		print $dbLog "MongoDB Start.  MongoDB is not sharded or replicated.";
+		print $dblog "MongoDB Start.  MongoDB is not sharded or replicated.";
 	}
 		
 	# Set up the configuration files for all of the hosts to be part of the service
-	$self->configure($dbLog, $serviceType, $users, $numNosqlShards, $numNosqlReplicas);
+	$self->configure($dblog, $serviceType, $users, $numNosqlShards, $numNosqlReplicas);
 
 	my $isReplicated = 0;
 	if ( ( $appInstance->numNosqlShards > 0 ) && ( $appInstance->numNosqlReplicas > 0 ) ) {
@@ -421,25 +422,25 @@ override 'start' => sub {
 	}
 	elsif ( $appInstance->numNosqlShards > 0 ) {
 		# start config servers
-		my $configdbString = $self->startMongocServers($dbLog);
+		my $configdbString = $self->startMongocServers($dblog);
 
 		# start shards
-		$self->startMongodServers($isReplicated, $dbLog);
+		$self->startMongodServers($isReplicated, $dblog);
 		
 		# start mongos servers
-		my $mongosHostPortListRef = $self->startMongosServers($configdbString, $dbLog);
+		my $mongosHostPortListRef = $self->startMongosServers($configdbString, $dblog);
 		my $mongosHostname = $mongosHostPortListRef->[0];
 		my $mongosPort = $mongosHostPortListRef->[1];
 		
 		# add the shards and shard the collections		
-		$self->configureSharding($mongosHostname, $mongosPort, $dbLog);
+		$self->configureSharding($mongosHostname, $mongosPort, $dblog);
 	}
 	elsif ( $appInstance->numNosqlReplicas > 0 ) {
 		$isReplicated = 1;
-		$self->startMongodServers($isReplicated, $dbLog);
+		$self->startMongodServers($isReplicated, $dblog);
 	}
 	else {
-		$self->startMongodServers($isReplicated, $dbLog);
+		$self->startMongodServers($isReplicated, $dblog);
 	}
 
 	$self->host->startNscd();
@@ -486,7 +487,7 @@ sub startMongodServers {
 
 
 sub startMongocServers {
-	my ( $self, $dbLog ) = @_;
+	my ( $self, $dblog ) = @_;
 	my $logger = get_logger("Weathervane::Services::MongodbService");
 	my $workloadNum = $self->getParamValue('workloadNum');
 	my $appInstanceNum = $self->getParamValue('appInstanceNum');
@@ -544,18 +545,18 @@ sub startMongocServers {
     			]
 		}))'";
 	my $cmdout = `$cmdString`;
-	print $dbLog "$cmdString\n";
-	print $dbLog $cmdout;
+	print $dblog "$cmdString\n";
+	print $dblog $cmdout;
 
 	# Wait for the config server replica set to be in sync
-	$self->waitForMongodbReplicaSync($configSvrHostnames[0], $configSvrPorts[0], $dbLog);
+	$self->waitForMongodbReplicaSync($configSvrHostnames[0], $configSvrPorts[0], $dblog);
 
 	return $configdbString;
 
 }
 
 sub startMongosServers {
-	my ( $self, $configdbString, $dbLog ) = @_;
+	my ( $self, $configdbString, $dblog ) = @_;
 	my $logger = get_logger("Weathervane::Services::MongodbService");
 
 	print $dblog "Starting mongos servers\n";
@@ -600,10 +601,10 @@ sub startMongosServers {
 
 
 sub configure {
-	my ( $self, $dbLog, $serviceType, $users, $numShards, $numReplicas ) = @_;
+	my ( $self, $dblog, $serviceType, $users, $numShards, $numReplicas ) = @_;
 	my $logger = get_logger("Weathervane::Services::MongodbService");
 	$logger->debug("Configure mongodb");
-	print $dbLog "Configure MongoDB\n";
+	print $dblog "Configure MongoDB\n";
 
 	my $workloadNum = $self->getParamValue('workloadNum');
 	my $appInstanceNum = $self->getParamValue('appInstanceNum');
