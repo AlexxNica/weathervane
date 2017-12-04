@@ -50,6 +50,18 @@ has 'replicaNum' => (
 	default => 0,
 );
 
+has 'numNosqlShards' => (
+	is      => 'rw',
+	isa     => 'Int',
+	default => 0,
+);
+
+has 'numNosqlReplicas' => (
+	is      => 'rw',
+	isa     => 'Int',
+	default => 0,
+);
+
 # This holds the total number of config servers
 # to be used in sharded mode MongoDB requires
 # this to be 3, but we don't want to hard-code
@@ -73,6 +85,65 @@ override 'initialize' => sub {
 	my $console_logger = get_logger("Console");
 	my $appInstance    = $self->appInstance;
 
+	# Figure out how many shards, and how many replicas per shard.
+	my $replicasPerShard = $self->getParamValue('nosqlReplicasPerShard');
+	my $sharded          = $self->getParamValue('nosqlSharded');
+	my $replicated       = $self->getParamValue('nosqlReplicated');
+	my $numNosqlServers = $appInstance->getNumActiveOfServiceType('nosqlServer');
+
+	# Determine the number of shards and replicas-per-shard
+	if ($sharded) {
+		if ($replicated) {
+			$console_logger->error("Configuring MongoDB as both sharded and replicated is not yet supported.");
+			exit(-1);
+		} else {
+			if ( $numNosqlServers < 2 ) {
+				$console_logger->error("When sharding MongoDB, the number of servers must be greater than 1.");
+				exit(-1);
+			}
+			$self->numNosqlShards = $numNosqlServers;
+			$logger->debug("MongoDB Start.  MongoDB is sharded with $numNosqlShards shards");
+			print $dblog "MongoDB Start.  MongoDB is sharded with $numNosqlShards shards";
+		}
+	}
+	elsif ($replicated) {
+		if ( ( $numNosqlServers % $replicasPerShard ) > 0 ) {
+			$console_logger->error(
+"When replicating MongoDB, the number of servers must be an even multiple of the number of replicas-per-shard ($replicasPerShard)."
+			);
+			exit(-1);
+		}
+		$self->numNosqlReplicas = $numNosqlServers / $replicasPerShard ;
+		$logger->debug("MongoDB Start.  MongoDB is replicated with $numNosqlReplicas replicas");
+		print $dblog "MongoDB Start.  MongoDB is replicated with $numNosqlReplicas replicas";
+	}
+	else {
+		if ( $numNosqlServers > 1 ) {
+			$console_logger->error(
+"When the number of MongoDB servers is greater than 1, the deployment must be sharded or replicated."
+			);
+			exit(-1);
+		}
+		$logger->debug("MongoDB Start.  MongoDB is not sharded or replicated.");
+		print $dblog "MongoDB Start.  MongoDB is not sharded or replicated.";
+	}
+	
+	if ( ( $self->numNosqlShards > 0 ) && ( $self->numNosqlReplicas > 0 ) ) {
+		$self->shardNum( ceil( $instanceNumber / ( 1.0 * $self->numNosqlReplicas ) ) );
+		$self->replicaNum( ( $instanceNumber % $self->numNosqlReplicas ) + 1 );
+		$self->internalPortMap->{'mongod'} = 27018 + $portOffset;
+	}
+	elsif ( $self->numNosqlShards > 0 ) {
+		$self->shardNum($instanceNumber);
+		$self->internalPortMap->{'mongod'} = 27018 + $portOffset;
+	}
+	elsif (  $self->numNosqlReplicas > 0 ) {
+		$self->replicaNum($instanceNumber);
+	}
+	elsif ( $numNosqlServers > 1 ) {
+		die "When not using sharding or replicas, the number of NoSQL servers must equal 1.";
+	}
+	
 	super();
 };
 
@@ -368,60 +439,15 @@ override 'start' => sub {
 	open( $dblog, ">$logName" )
 	  || die "Error opening /$logName:$!";
 	print $dblog $self->meta->name . " In MongodbService::start\n";
-
-	# Figure out how many shards, and how many replicas per shard.
-	my $replicasPerShard = $self->getParamValue('nosqlReplicasPerShard');
-	my $sharded          = $self->getParamValue('nosqlSharded');
-	my $replicated       = $self->getParamValue('nosqlReplicated');
-	my $numNosqlServers = $appInstance->getNumActiveOfServiceType('nosqlServer');
-
-	# Determine the number of shards and replicas-per-shard
-	my $numNosqlShards = 0;
-	my $numNosqlReplicas = 0;
-	if ($sharded) {
-		if ($replicated) {
-			$console_logger->error("Configuring MongoDB as both sharded and replicated is not yet supported.");
-			exit(-1);
-		} else {
-			if ( $numNosqlServers < 2 ) {
-				$console_logger->error("When sharding MongoDB, the number of servers must be greater than 1.");
-				exit(-1);
-			}
-			$numNosqlShards = $numNosqlServers;
-			$logger->debug("MongoDB Start.  MongoDB is sharded with $numNosqlShards shards");
-			print $dblog "MongoDB Start.  MongoDB is sharded with $numNosqlShards shards";
-		}
-	}
-	elsif ($replicated) {
-		if ( ( $numNosqlServers % $replicasPerShard ) > 0 ) {
-			$console_logger->error(
-"When replicating MongoDB, the number of servers must be an even multiple of the number of replicas-per-shard ($replicasPerShard)."
-			);
-			exit(-1);
-		}
-		$numNosqlReplicas = $numNosqlServers / $replicasPerShard ;
-		$logger->debug("MongoDB Start.  MongoDB is replicated with $numNosqlReplicas replicas");
-		print $dblog "MongoDB Start.  MongoDB is replicated with $numNosqlReplicas replicas";
-	}
-	else {
-		if ( $numNosqlServers > 1 ) {
-			$console_logger->error(
-"When the number of MongoDB servers is greater than 1, the deployment must be sharded or replicated."
-			);
-			exit(-1);
-		}
-		$logger->debug("MongoDB Start.  MongoDB is not sharded or replicated.");
-		print $dblog "MongoDB Start.  MongoDB is not sharded or replicated.";
-	}
 		
 	# Set up the configuration files for all of the hosts to be part of the service
 	$self->configure($dblog, $serviceType, $users, $numNosqlShards, $numNosqlReplicas);
 
 	my $isReplicated = 0;
-	if ( ( $appInstance->numNosqlShards > 0 ) && ( $appInstance->numNosqlReplicas > 0 ) ) {
+	if ( ( $self->numNosqlShards > 0 ) && ( $self->numNosqlReplicas > 0 ) ) {
 		die "Need to implement startShardedReplicatedMongodb";
 	}
-	elsif ( $appInstance->numNosqlShards > 0 ) {
+	elsif ( $self->numNosqlShards > 0 ) {
 		# start config servers
 		my $configdbString = $self->startMongocServers($dblog);
 
@@ -436,7 +462,7 @@ override 'start' => sub {
 		# add the shards and shard the collections		
 		$self->configureSharding($mongosHostname, $mongosPort, $dblog);
 	}
-	elsif ( $appInstance->numNosqlReplicas > 0 ) {
+	elsif ( $self->numNosqlReplicas > 0 ) {
 		$isReplicated = 1;
 		$self->startMongodServers($isReplicated, $dblog);
 	}
@@ -1191,10 +1217,6 @@ sub isRunning {
 
 sub setPortNumbers {
 	my ($self)          = @_;
-	my $appInstance     = $self->appInstance;
-	my $numNosqlServers = $appInstance->getNumActiveOfServiceType('nosqlServer');
-	my $numShards       = $appInstance->numNosqlShards;
-	my $numReplicas     = $appInstance->numNosqlReplicas;
 	my $serviceType     = $self->getParamValue('serviceType');
 	my $portMultiplier = $self->appInstance->getNextPortMultiplierByServiceType($serviceType);
 	my $portOffset     = $self->getParamValue( $serviceType . 'PortStep' ) * $portMultiplier;
@@ -1205,21 +1227,6 @@ sub setPortNumbers {
 	$self->internalPortMap->{'mongoc1'} = 27019;
 	$self->internalPortMap->{'mongoc2'} = 27020;
 	$self->internalPortMap->{'mongoc3'} = 27021;
-	if ( ( $numShards > 0 ) && ( $numReplicas > 0 ) ) {
-		$self->shardNum( ceil( $instanceNumber / ( 1.0 * $appInstance->numNosqlReplicas ) ) );
-		$self->replicaNum( ( $instanceNumber % $appInstance->numNosqlReplicas ) + 1 );
-		$self->internalPortMap->{'mongod'} = 27018 + $portOffset;
-	}
-	elsif ( $numShards > 0 ) {
-		$self->shardNum($instanceNumber);
-		$self->internalPortMap->{'mongod'} = 27018 + $portOffset;
-	}
-	elsif ( $numReplicas > 0 ) {
-		$self->replicaNum($instanceNumber);
-	}
-	elsif ( $numNosqlServers > 1 ) {
-		die "When not using sharding or replicas, the number of NoSQL servers must equal 1.";
-	}
 }
 
 sub setExternalPortNumbers {
