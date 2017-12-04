@@ -89,8 +89,9 @@ override 'initialize' => sub {
 	my $replicasPerShard = $self->getParamValue('nosqlReplicasPerShard');
 	my $sharded          = $self->getParamValue('nosqlSharded');
 	my $replicated       = $self->getParamValue('nosqlReplicated');
-	my $numNosqlServers = $appInstance->getNumActiveOfServiceType('nosqlServer');
-
+	
+	my $numNosqlShards = 0;
+	my $numNosqlReplicas = 0;
 	# Determine the number of shards and replicas-per-shard
 	if ($sharded) {
 		if ($replicated) {
@@ -101,7 +102,7 @@ override 'initialize' => sub {
 				$console_logger->error("When sharding MongoDB, the number of servers must be greater than 1.");
 				exit(-1);
 			}
-			$self->numNosqlShards = $numNosqlServers;
+			$numNosqlShards = $self->numNosqlShards = $numNosqlServers;
 			$logger->debug("MongoDB Start.  MongoDB is sharded with $numNosqlShards shards");
 			print $dblog "MongoDB Start.  MongoDB is sharded with $numNosqlShards shards";
 		}
@@ -113,7 +114,7 @@ override 'initialize' => sub {
 			);
 			exit(-1);
 		}
-		$self->numNosqlReplicas = $numNosqlServers / $replicasPerShard ;
+		$numNosqlReplicas = $self->numNosqlReplicas = $numNosqlServers / $replicasPerShard ;
 		$logger->debug("MongoDB Start.  MongoDB is replicated with $numNosqlReplicas replicas");
 		print $dblog "MongoDB Start.  MongoDB is replicated with $numNosqlReplicas replicas";
 	}
