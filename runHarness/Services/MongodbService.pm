@@ -104,7 +104,6 @@ override 'initialize' => sub {
 			}
 			$numNosqlShards = $self->numNosqlShards = $numNosqlServers;
 			$logger->debug("MongoDB Start.  MongoDB is sharded with $numNosqlShards shards");
-			print $dblog "MongoDB Start.  MongoDB is sharded with $numNosqlShards shards";
 		}
 	}
 	elsif ($replicated) {
@@ -116,7 +115,6 @@ override 'initialize' => sub {
 		}
 		$numNosqlReplicas = $self->numNosqlReplicas = $numNosqlServers / $replicasPerShard ;
 		$logger->debug("MongoDB Start.  MongoDB is replicated with $numNosqlReplicas replicas");
-		print $dblog "MongoDB Start.  MongoDB is replicated with $numNosqlReplicas replicas";
 	}
 	else {
 		if ( $numNosqlServers > 1 ) {
@@ -126,17 +124,15 @@ override 'initialize' => sub {
 			exit(-1);
 		}
 		$logger->debug("MongoDB Start.  MongoDB is not sharded or replicated.");
-		print $dblog "MongoDB Start.  MongoDB is not sharded or replicated.";
 	}
 	
+	my $instanceNumber = $self->getParamValue('instanceNum');
 	if ( ( $self->numNosqlShards > 0 ) && ( $self->numNosqlReplicas > 0 ) ) {
 		$self->shardNum( ceil( $instanceNumber / ( 1.0 * $self->numNosqlReplicas ) ) );
 		$self->replicaNum( ( $instanceNumber % $self->numNosqlReplicas ) + 1 );
-		$self->internalPortMap->{'mongod'} = 27018 + $portOffset;
 	}
 	elsif ( $self->numNosqlShards > 0 ) {
 		$self->shardNum($instanceNumber);
-		$self->internalPortMap->{'mongod'} = 27018 + $portOffset;
 	}
 	elsif (  $self->numNosqlReplicas > 0 ) {
 		$self->replicaNum($instanceNumber);
@@ -1222,12 +1218,18 @@ sub setPortNumbers {
 	my $portMultiplier = $self->appInstance->getNextPortMultiplierByServiceType($serviceType);
 	my $portOffset     = $self->getParamValue( $serviceType . 'PortStep' ) * $portMultiplier;
 
-	my $instanceNumber = $self->getParamValue('instanceNum');
 	$self->internalPortMap->{'mongod'}  = 27017 + $portOffset;
 	$self->internalPortMap->{'mongos'}  = 27017;
 	$self->internalPortMap->{'mongoc1'} = 27019;
 	$self->internalPortMap->{'mongoc2'} = 27020;
 	$self->internalPortMap->{'mongoc3'} = 27021;
+	if ( ( $self->numNosqlShards > 0 ) && ( $self->numNosqlReplicas > 0 ) ) {
+		$self->internalPortMap->{'mongod'} = 27018 + $portOffset;
+	}
+	elsif ( $self->numNosqlShards > 0 ) {
+		$self->internalPortMap->{'mongod'} = 27018 + $portOffset;
+	}
+
 }
 
 sub setExternalPortNumbers {
