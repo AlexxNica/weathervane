@@ -250,7 +250,7 @@ sub stopMongocServers {
 }
 
 sub stopMongosServers {
-	my ( $self, $configdbString, $dblog ) = @_;
+	my ( $self, $dblog ) = @_;
 	my $logger = get_logger("Weathervane::Services::MongodbService");
 
 	print $dblog "Stopping mongos servers\n";
