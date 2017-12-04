@@ -102,7 +102,8 @@ override 'initialize' => sub {
 				$console_logger->error("When sharding MongoDB, the number of servers must be greater than 1.");
 				exit(-1);
 			}
-			$numNosqlShards = $self->numNosqlShards = $numNosqlServers;
+			$numNosqlShards = $numNosqlServers;
+			$self->numNosqlShards($numNosqlServers);
 			$logger->debug("MongoDB Start.  MongoDB is sharded with $numNosqlShards shards");
 		}
 	}
@@ -113,7 +114,8 @@ override 'initialize' => sub {
 			);
 			exit(-1);
 		}
-		$numNosqlReplicas = $self->numNosqlReplicas = $numNosqlServers / $replicasPerShard ;
+		$numNosqlReplicas = $numNosqlServers / $replicasPerShard ;
+		$self->numNosqlReplicas($numNosqlReplicas);
 		$logger->debug("MongoDB Start.  MongoDB is replicated with $numNosqlReplicas replicas");
 	}
 	else {
