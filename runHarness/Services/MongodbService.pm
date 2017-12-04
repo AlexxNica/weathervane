@@ -392,7 +392,7 @@ sub startMongocServers {
 
 			# Start a config server on this host
 			print $dblog "Starting configserver$curCfgSvr on $mongoHostname, port $configPort\n";
-			$logger->debug("Starting configserver$curCfgSvr on $mongoHostname");
+			$logger->debug("Starting configserver$curCfgSvr on $mongoHostname, port $configPort");
 			my $cmdOut = `$sshConnectString mongod -f /etc/mongoc$curCfgSvr.conf 2>&1`;
 			print $dblog "$sshConnectString mongod -f /etc/mongoc$curCfgSvr.conf 2>&1\n";
 			print $dblog $cmdOut;
@@ -432,7 +432,8 @@ sub startMongocServers {
 
 	# Wait for the config server replica set to be in sync
 	$self->waitForMongodbReplicaSync($configSvrHostnames[0], $configSvrPorts[0], $dblog);
-
+	
+	$logger->debug("startMongocServers returning configdbString $configdbString");	
 	return $configdbString;
 
 }
@@ -465,8 +466,8 @@ sub startMongosServers {
 		$hostsMongosStarted{$appIpAddr} = 1;
 
 		my $appSshConnectString = $appServer->host->sshConnectString;
-		print $dblog "Starting mongos on app server host $appHostname\n";
-		$logger->debug("Starting mongos on app server host $appHostname");
+		print $dblog "Starting mongos on app server host $appHostname, configdb = $configdbString\n";
+		$logger->debug("Starting mongos on app server host $appHostname, configdb = $configdbString");
 		print $dblog "$appSshConnectString mongos -f /etc/mongos.conf --configdb $configdbString 2>&1\n";
 		my $cmdOut = `$appSshConnectString mongos -f /etc/mongos.conf --configdb $configdbString 2>&1`;
 		print $dblog $cmdOut;
