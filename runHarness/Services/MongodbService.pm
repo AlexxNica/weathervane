@@ -866,7 +866,7 @@ sub configureSharding {
 	# enable sharding for the databases
 	print $applog "Enabling sharding for auction database.\n";
 	$cmdString = "mongo --host $mongosHostname --port $mongosPort --eval 'printjson(sh.enableSharding(\\\"auction\\\"))'";
-	my $cmdout = `$sshConnectString \"$cmdString\"`;
+	$cmdout = `$sshConnectString \"$cmdString\"`;
 	print $applog "$sshConnectString \"$cmdString\"\n";
 	print $applog $cmdout;
 	print $applog "Enabling sharding for bid database.\n";
@@ -997,11 +997,6 @@ sub configureAfterStart {
 	my $host = $self->host;
 	my $hostname = $self->host->hostName;
 
-	my $logName = "$logPath/ConfigureAfterStartMongodb-$hostname-$name.log";
-	my $applog;
-	open( $applog, ">$logName" )
-	  || die "Error opening /$logName:$!";
-
 	my $appInstance = $self->appInstance;
 
 	my $nosqlServersRef = $appInstance->getActiveServicesByType('nosqlServer');
@@ -1081,7 +1076,6 @@ sub configureAfterStart {
 
 	}
 
-	close $appLog;
 }
 
 sub clearDataAfterStart {
