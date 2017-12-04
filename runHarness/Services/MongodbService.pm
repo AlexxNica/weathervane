@@ -146,281 +146,138 @@ override 'initialize' => sub {
 	super();
 };
 
-sub stopInstance {
-	my ( $self, $logPath ) = @_;
+# Stop all of the services needed for the MongoDB service
+override 'stop' => sub {
+	my ($self, $serviceType, $users, $logPath)            = @_;
+	my $logger = get_logger("Weathervane::Services::MongodbService");
+	my $console_logger   = get_logger("Console");
+	my $logName     = "$logPath/StopMongodb.log";
 	my $appInstance = $self->appInstance;
+	
+	$logger->debug("MongoDB Start");
+	
+	my $dblog;
+	open( $dblog, ">$logName" )
+	  || die "Error opening /$logName:$!";
+	print $dblog $self->meta->name . " In MongodbService::start\n";
+		
+	# Set up the configuration files for all of the hosts to be part of the service
+	$self->configure($dblog, $serviceType, $users, $self->numNosqlShards, $self->numNosqlReplicas);
 
 	if ( ( $self->numNosqlShards > 0 ) && ( $self->numNosqlReplicas > 0 ) ) {
-		$self->stopShardedReplicatedMongodb($logPath);
+		die "Need to implement stopShardedReplicatedMongodb";
 	}
 	elsif ( $self->numNosqlShards > 0 ) {
-		$self->stopShardedMongodb($logPath);
+		# stop mongos servers
+		$self->stopMongosServers($dblog);
+
+		# stop config servers
+		$self->stopMongocServers($dblog);
 	}
-	elsif ( $self->numNosqlReplicas > 0 ) {
-		$self->stopReplicatedMongodb($logPath);
+
+	# stop mongod servers
+	$self->stopMongodServers($dblog);
+		
+	$self->cleanLogFiles();
+	$self->cleanStatsFiles();
+
+};
+
+sub stopMongodServers {
+	my ( $self, $dblog ) = @_;
+	my $logger = get_logger("Weathervane::Services::MongodbService");
+	
+	print $dblog "stopping mongod servers\n";
+	$logger->debug("stopping mongod servers");
+
+	#  stop all of the mongod servers
+	my $nosqlServersRef = $self->appInstance->getActiveServicesByType('nosqlServer');
+	foreach my $nosqlServer (@$nosqlServersRef) {	
+		my $hostname = $nosqlServer->host->hostName;
+
+		# stop the mongod on this host
+		print $dblog "stopping mongod on $hostname\n";
+		$logger->debug("stopping mongod on $hostname");
+		my $sshConnectString = $self->host->sshConnectString;
+
+		my $cmdString = "$sshConnectString mongod -f /etc/mongod.conf --shutdown";
+		my $cmdOut = `$cmdString 2>&1`;
+		print $dblog "$cmdString 2>&1\n";
+		print $dblog $cmdOut;
+
+		my $dir = $self->getParamValue('mongodbDataDir');
+		$cmdOut = `$sshConnectString rm -f $dir/mongod.lock`;
+		print $dblog "$sshConnectString rm -f $dir/mongod.lock\n";
+		print $dblog "$cmdOut\n";
+
 	}
-	else {
-		$self->stopSingleMongodb($logPath);
+	
+}
+
+sub stopMongocServers {
+	my ( $self, $dblog ) = @_;
+	my $logger = get_logger("Weathervane::Services::MongodbService");
+
+	print $dblog "Stopping config servers\n";
+	$logger->debug("Stopping config servers");
+
+	my $curCfgSvr = 1;
+	my $nosqlServersRef = $self->appInstance->getActiveServicesByType('nosqlServer');
+	while ( $curCfgSvr <= $self->numConfigServers ) {
+
+		foreach my $nosqlServer (@$nosqlServersRef) {
+			my $mongoHostname    = $nosqlServer->host->hostName;
+			my $sshConnectString = $nosqlServer->host->sshConnectString;
+
+			# Stop config server on this host
+			print $dblog "Stopping configserver$curCfgSvr on $mongoHostname\n";
+			$logger->debug("Stopping configserver$curCfgSvr on $mongoHostname");
+			my $cmdOut = `$sshConnectString mongod -f /etc/mongoc$curCfgSvr.conf --shutdown 2>&1`;
+			print $dblog "$sshConnectString mongod -f /etc/mongoc$curCfgSvr.conf --shutdown 2>&1\n";
+			print $dblog $cmdOut;
+			
+			my $dir    = $self->getParamValue("mongodbC${curCfgSvr}DataDir");
+			$cmdOut = `$sshConnectString rm -f $dir/mongod.lock`;
+			print $dblog "$sshConnectString rm -f $dir/mongod.lock\n";
+			print $dblog "$cmdOut\n";
+
+			$curCfgSvr++;
+			if ( $curCfgSvr > $self->numConfigServers ) {
+				last;
+			}
+		}
 	}
 
 }
 
-sub stopShardedMongodb {
-	my ( $self, $logPath ) = @_;
-	my $logger           = get_logger("Weathervane::Services::MongodbService");
-	my $hostname         = $self->host->hostName;
-	my $logName          = "$logPath/StopShardedMongodb-$hostname.log";
-	my $sshConnectString = $self->host->sshConnectString;
-	my $appInstance      = $self->appInstance;
-	$logger->debug("stop ShardedMongodbService");
+sub stopMongosServers {
+	my ( $self, $configdbString, $dblog ) = @_;
+	my $logger = get_logger("Weathervane::Services::MongodbService");
 
-	my $dblog;
-	open( $dblog, ">$logName" )
-	  || die "Error opening /$logName:$!";
-	print $dblog $self->meta->name . " In MongodbService::stopShardedMongodb\n";
-	$logger->debug("In StopShardedMongodb");
+	print $dblog "Stopping mongos servers\n";
+	$logger->debug("Stopping mongos servers");
 
-	my $cmdOut;
+	my $appServersRef = $self->appInstance->getActiveServicesByType('appServer');
+	my %hostsMongosStarted;
+	foreach my $appServer (@$appServersRef) {
+		my $appHostname = $appServer->host->hostName;
+		my $appSshConnectString = $appServer->host->sshConnectString;
 
-	# If this is the first MongoDB service to run,
-	# then configure the numShardsProcessed variable
-	if ( !$appInstance->has_numShardsProcessed() ) {
-		print $dblog "Setting numShardsProcessed to 1.\n";
-		$appInstance->numShardsProcessed(1);
-	}
-	else {
-		my $numShardsProcessed = $appInstance->numShardsProcessed;
-		print $dblog "Incrementing numShardsProcessed from $numShardsProcessed \n";
-		$appInstance->numShardsProcessed( $numShardsProcessed + 1 );
-	}
-
-	# first check for mongod and mongoc on this node and stop if present
-	$cmdOut = `$sshConnectString \"ps x | grep mongo | grep -v grep\"`;
-	print $dblog "Result of ps x | grep mongo:\n";
-	print $dblog "$cmdOut\n";
-	my @lines = split /\n/, $cmdOut;
-
-	foreach my $line (@lines) {
-		if ( $line =~ /^\s*(\d+)\s.*mongod\.conf/ ) {
-			my $pid = $1;
-			print $dblog "mongod shard is running on $hostname.  Stopping\n";
-			my $port = $self->internalPortMap->{'mongod'};
-			$cmdOut = `$sshConnectString mongod --shutdown -f /etc/mongod.conf 2>&1`;
-			print $dblog "$cmdOut\n";
-			if ( $cmdOut =~ /There\sdoesn't\sseem/ ) {
-
-				# Mongod can't be shutdown normally
-				print $dblog "mongod shard is still running on $hostname.  Stopping\n";
-				$cmdOut = `$sshConnectString kill -9 $pid`;
-				print $dblog "$cmdOut\n";
-			}
-		}
-		if ( $line =~ /^\s*(\d+)\s.*mongoc1\.conf/ ) {
-			my $pid = $1;
-			print $dblog "mongod configserver1 is running on $hostname.  Stopping\n";
-			my $port = $self->internalPortMap->{'mongoc1'};
-			$cmdOut = `$sshConnectString mongod --shutdown -f /etc/mongoc1.conf  2>&1`;
-			print $dblog "$cmdOut\n";
-			if ( $cmdOut =~ /There\sdoesn't\sseem/ ) {
-
-				# Mongod can't be shutdown normally
-				print $dblog "mongod configserver1 is still running on $hostname.  Stopping\n";
-				$cmdOut = `$sshConnectString kill -9 $pid`;
-				print $dblog "$cmdOut\n";
-			}
-		}
-		if ( $line =~ /^\s*(\d+)\s.*mongoc2\.conf/ ) {
-			my $pid = $1;
-			print $dblog "mongod configserver2 is running on $hostname.  Stopping\n";
-			my $port = $self->internalPortMap->{'mongoc2'};
-			$cmdOut = `$sshConnectString mongod --shutdown -f /etc/mongoc2.conf  2>&1`;
-			print $dblog "$cmdOut\n";
-			if ( $cmdOut =~ /There\sdoesn't\sseem/ ) {
-
-				# Mongod can't be shutdown normally
-				print $dblog "mongod configserver2 is still running on $hostname.  Stopping\n";
-				$cmdOut = `$sshConnectString kill -9 $pid`;
-				print $dblog "$cmdOut\n";
-			}
-		}
-		if ( $line =~ /^\s*(\d+)\s.*mongoc3\.conf/ ) {
-			my $pid = $1;
-			print $dblog "mongod configserver3 is running on $hostname.  Stopping\n";
-			my $port = $self->internalPortMap->{'mongoc3'};
-			$cmdOut = `$sshConnectString mongod --shutdown -f /etc/mongoc3.conf  2>&1`;
-			print $dblog "$cmdOut\n";
-			if ( $cmdOut =~ /There\sdoesn't\sseem/ ) {
-
-				# Mongod can't be shutdown normally
-				print $dblog "mongod configserver3 is still running on $hostname.  Stopping\n";
-				$cmdOut = `$sshConnectString kill -9 $pid`;
-				print $dblog "$cmdOut\n";
-			}
-		}
-	}
-
-	my $dir = $self->getParamValue('mongodbDataDir');
-	$cmdOut = `$sshConnectString rm -f $dir/mongod.lock`;
-	print $dblog "$cmdOut\n";
-	$dir    = $self->getParamValue('mongodbC1DataDir');
-	$cmdOut = `$sshConnectString rm -f $dir/mongod.lock`;
-	print $dblog "$cmdOut\n";
-	$dir    = $self->getParamValue('mongodbC2DataDir');
-	$cmdOut = `$sshConnectString rm -f $dir/mongod.lock`;
-	print $dblog "$cmdOut\n";
-	$dir    = $self->getParamValue('mongodbC3DataDir');
-	$cmdOut = `$sshConnectString rm -f $dir/mongod.lock`;
-	print $dblog "$cmdOut\n";
-
-	# if this is the first mongodbService then stop the mongos routers
-	if ( $appInstance->numShardsProcessed == 1 ) {
-		my $appServersRef = $self->appInstance->getActiveServicesByType('appServer');
-		foreach my $appServer (@$appServersRef) {
-			my $appHostname         = $appServer->host->hostName;
-			my $appSshConnectString = $appServer->host->sshConnectString;
-
-			print $dblog "Checking whether mongos is running on $appHostname\n";
-
-			# first make sure the mongos is running.  If so, stop it.
-			$cmdOut = `$appSshConnectString \"ps x | grep mongo | grep -v grep\"`;
-			print $dblog "ps output on $appHostname: $cmdOut\n";
-			@lines = split /\n/, $cmdOut;
-
-			foreach my $line (@lines) {
-
-				if ( $line =~ /\s*(\d+)\s.*mongos\.conf/ ) {
-					my $pid = $1;
-					print $dblog "mongos router is running on $appHostname.  Stopping process $pid\n";
-					$cmdOut = `$appSshConnectString kill $pid`;
-				}
-			}
-		}
+		print $dblog "Checking whether mongos is running on $appHostname\n";
 
 		# first make sure the mongos is running.  If so, stop it.
-		my $dataManagerHostname         = $appInstance->dataManager->host->hostName;
-		my $dataManagerSshConnectString = $appInstance->dataManager->host->sshConnectString;
-		print $dblog "Checking whether mongos is running on $dataManagerHostname\n";
-
-		$cmdOut = `$dataManagerSshConnectString \"ps x | grep mongo | grep -v grep\"`;
-		print $dblog "ps output on $dataManagerHostname: $cmdOut\n";
+		$cmdOut = `$appSshConnectString \"ps x | grep mongo | grep -v grep\"`;
+		print $dblog "ps output on $appHostname: $cmdOut\n";
 		@lines = split /\n/, $cmdOut;
-
 		foreach my $line (@lines) {
 			if ( $line =~ /\s*(\d+)\s.*mongos\.conf/ ) {
 				my $pid = $1;
-				print $dblog "mongos router is running on $dataManagerHostname.  Stopping process $pid\n";
-				$cmdOut = `$dataManagerSshConnectString kill $pid`;
+				print $dblog "mongos router is running on $appHostname.  Stopping process $pid\n";
+				$cmdOut = `$appSshConnectString kill $pid`;
 			}
 		}
 	}
-	close $dblog;
 
-	# If this is the last Mongodb service to be processed,
-	# then clear the static variables for the next action
-	if ( $appInstance->numShardsProcessed == $appInstance->numNosqlShards ) {
-		$appInstance->clear_numShardsProcessed;
-		$appInstance->clear_configDbString;
-	}
-
-}
-
-sub stopReplicatedMongodb {
-
-	my ( $self, $logPath ) = @_;
-	my $logger = get_logger("Weathervane::Services::MongodbService");
-	$logger->debug("stop ReplicatedMongodbService");
-
-	my $hostname         = $self->host->hostName;
-	my $logName          = "$logPath/StopReplicatedMongodb-$hostname.log";
-	my $sshConnectString = $self->host->sshConnectString;
-
-	my $dblog;
-	open( $dblog, ">$logName" )
-	  || die "Error opening /$logName:$!";
-	print $dblog $self->meta->name . " In MongodbService::stopReplicatedMongodb\n";
-
-	# first make sure the db is running.  If so, stop it.
-	if ( $self->isRunning($dblog) ) {
-		print $dblog "mongod is running on $hostname.  Stopping\n";
-		my $port = $self->internalPortMap->{'mongod'};
-		`$sshConnectString mongod --shutdown -f /etc/mongod.conf`;
-
-		my $cmdOut = `$sshConnectString \"ps x | grep mongo | grep -v grep\"`;
-		if ( $cmdOut =~ /^\s*(\d+)\s.*mongod\.conf/ ) {
-			my $pid = $1;
-			print $dblog "mongod shard is still running on $hostname.  Stopping\n";
-
-			# Mongod can't be shutdown normally
-			$cmdOut = `$sshConnectString kill -9 $pid`;
-			print $dblog "$cmdOut\n";
-		}
-
-	}
-	my $dir    = $self->getParamValue('mongodbDataDir');
-	my $cmdOut = `$sshConnectString rm -f $dir/mongod.lock`;
-	print $dblog "$cmdOut\n";
-
-	close $dblog;
-
-}
-
-sub stopShardedReplicatedMongodb {
-
-	my ( $self, $logPath ) = @_;
-
-	my $hostname         = $self->host->hostName;
-	my $logName          = "$logPath/StopShardedReplicatedMongodb-$hostname.log";
-	my $sshConnectString = $self->host->sshConnectString;
-
-	my $dblog;
-	open( $dblog, ">$logName" )
-	  || die "Error opening /$logName:$!";
-	print $dblog $self->meta->name . " In MongodbService::stopShardedReplicatedMongodb\n";
-
-	my $cmdOut;
-	close $dblog;
-
-}
-
-sub stopSingleMongodb {
-	my ( $self, $logPath ) = @_;
-	my $logger = get_logger("Weathervane::Services::MongodbService");
-	$logger->debug("stop SingleMongodbService");
-
-	my $hostname         = $self->host->hostName;
-	my $logName          = "$logPath/StopSingleMongodb-$hostname.log";
-	my $sshConnectString = $self->host->sshConnectString;
-
-	my $dblog;
-	open( $dblog, ">$logName" )
-	  || die "Error opening /$logName:$!";
-
-	print $dblog $self->meta->name . " In MongodbService::stopSingleMongodb\n";
-
-	my $cmdOut;
-
-	# first make sure the db is running.  If so, stop it.
-	if ( $self->isRunning($dblog) ) {
-		print $dblog "mongod is running on $hostname.  Stopping\n";
-		my $port = $self->internalPortMap->{'mongod'};
-		`$sshConnectString mongod --shutdown -f /etc/mongod.conf`;
-
-		my $cmdOut = `$sshConnectString \"ps x | grep mongo | grep -v grep\"`;
-		if ( $cmdOut =~ /^\s*(\d+)\s.*mongod\.conf/ ) {
-			my $pid = $1;
-			print $dblog "mongod shard is still running on $hostname.  Stopping\n";
-
-			# Mongod can't be shutdown normally
-			$cmdOut = `$sshConnectString kill -9 $pid`;
-			print $dblog "$cmdOut\n";
-		}
-
-	}
-	my $dir = $self->getParamValue('mongodbDataDir');
-	$cmdOut = `$sshConnectString rm -f $dir/mongod.lock`;
-	print $dblog "$cmdOut\n";
-
-	close $dblog;
 }
 
 # Configure and Start all of the services needed for the 
@@ -501,8 +358,8 @@ sub startMongodServers {
 			my $replicaName      = "auction" . $self->shardNum;
 			$cmdString .= " --replSet=$replicaName ";
 		}
-		my $cmdOut = `$sshConnectString mongod -f /etc/mongod.conf 2>&1`;
-		print $dblog "$sshConnectString mongod -f /etc/mongod.conf 2>&1\n";
+		my $cmdOut = `$cmdString 2>&1`;
+		print $dblog "$cmdString 2>&1\n";
 		print $dblog $cmdOut;
 		if ( !( $cmdOut =~ /success/ ) ) {
 			print $dblog "Couldn't start mongod on $hostname : $cmdOut\n";
@@ -511,7 +368,6 @@ sub startMongodServers {
 	}
 	
 }
-
 
 sub startMongocServers {
 	my ( $self, $dblog ) = @_;
@@ -609,9 +465,7 @@ sub startMongosServers {
 
 		$hostsMongosStarted{$appIpAddr} = 1;
 
-		# Copy config files to app servers
 		my $appSshConnectString = $appServer->host->sshConnectString;
-
 		print $dblog "Starting mongos on app server host $appHostname\n";
 		$logger->debug("Starting mongos on app server host $appHostname");
 		print $dblog "$appSshConnectString mongos -f /etc/mongos.conf --configdb $configdbString 2>&1\n";
@@ -625,7 +479,6 @@ sub startMongosServers {
 
 	return [$mongosSvrHostnames[0], $mongosSvrPorts[0]];
 }
-
 
 sub configure {
 	my ( $self, $dblog, $serviceType, $users, $numShards, $numReplicas ) = @_;
