@@ -295,6 +295,12 @@ override 'start' => sub {
 	  || die "Error opening /$logName:$!";
 	print $dblog $self->meta->name . " In MongodbService::start\n";
 		
+	$nosqlServer->portMap->{'mongod'}  = $nosqlServer->internalPortMap->{'mongod'};
+	$nosqlServer->portMap->{'mongoc1'} = $nosqlServer->internalPortMap->{'mongoc1'};
+	$nosqlServer->portMap->{'mongoc2'} = $nosqlServer->internalPortMap->{'mongoc2'};
+	$nosqlServer->portMap->{'mongoc3'} = $nosqlServer->internalPortMap->{'mongoc3'};
+	$nosqlServer->registerPortsWithHost();
+
 	# Set up the configuration files for all of the hosts to be part of the service
 	$self->configure($dblog, $serviceType, $users, $self->numNosqlShards, $self->numNosqlReplicas);
 
@@ -341,12 +347,6 @@ sub startMongodServers {
 	foreach my $nosqlServer (@$nosqlServersRef) {	
 		my $hostname = $nosqlServer->host->hostName;
 		
-		$nosqlServer->portMap->{'mongod'}  = $nosqlServer->internalPortMap->{'mongod'};
-		$nosqlServer->portMap->{'mongoc1'} = $nosqlServer->internalPortMap->{'mongoc1'};
-		$nosqlServer->portMap->{'mongoc2'} = $nosqlServer->internalPortMap->{'mongoc2'};
-		$nosqlServer->portMap->{'mongoc3'} = $nosqlServer->internalPortMap->{'mongoc3'};
-		$nosqlServer->registerPortsWithHost();
-
 		# start the mongod on this host
 		print $dblog "Starting mongod on $hostname, isReplicated = $isReplicated\n";
 		$logger->debug("Starting mongod on $hostname, isReplicated = $isReplicated");
@@ -391,7 +391,7 @@ sub startMongocServers {
 			my $sshConnectString = $nosqlServer->host->sshConnectString;
 
 			# Start a config server on this host
-			print $dblog "Starting configserver$curCfgSvr on $mongoHostname\n";
+			print $dblog "Starting configserver$curCfgSvr on $mongoHostname, port $configPort\n";
 			$logger->debug("Starting configserver$curCfgSvr on $mongoHostname");
 			my $cmdOut = `$sshConnectString mongod -f /etc/mongoc$curCfgSvr.conf 2>&1`;
 			print $dblog "$sshConnectString mongod -f /etc/mongoc$curCfgSvr.conf 2>&1\n";
@@ -1003,7 +1003,7 @@ sub clearDataBeforeStart {
 sub waitForMongodbReplicaSync {
 	my ( $self, $nosqlHostname, $port, $runLog) = @_;
 	my $console_logger = get_logger("Console");
-	my $logger         = get_logger("Weathervane::DataManager::AuctionDataManager");
+	my $logger = get_logger("Weathervane::Services::MongodbService");
 
 	my $workloadNum    = $self->getParamValue('workloadNum');
 	my $appInstanceNum = $self->getParamValue('appInstanceNum');
@@ -1068,10 +1068,12 @@ sub isRunning {
 
 sub setPortNumbers {
 	my ($self)          = @_;
+	my $logger = get_logger("Weathervane::Services::MongodbService");
 	my $serviceType     = $self->getParamValue('serviceType');
 	my $portMultiplier = $self->appInstance->getNextPortMultiplierByServiceType($serviceType);
 	my $portOffset     = $self->getParamValue( $serviceType . 'PortStep' ) * $portMultiplier;
 
+	$logger->debug("setPortNumbers");
 	$self->internalPortMap->{'mongod'}  = 27017 + $portOffset;
 	$self->internalPortMap->{'mongos'}  = 27017;
 	$self->internalPortMap->{'mongoc1'} = 27019;
