@@ -154,16 +154,13 @@ override 'stop' => sub {
 	my $logName     = "$logPath/StopMongodb.log";
 	my $appInstance = $self->appInstance;
 	
-	$logger->debug("MongoDB Start");
+	$logger->debug("MongoDB Stop");
 	
 	my $dblog;
 	open( $dblog, ">$logName" )
 	  || die "Error opening /$logName:$!";
-	print $dblog $self->meta->name . " In MongodbService::start\n";
+	print $dblog $self->meta->name . " In MongodbService::stop\n";
 		
-	# Set up the configuration files for all of the hosts to be part of the service
-	$self->configure($dblog, $serviceType, $users, $self->numNosqlShards, $self->numNosqlReplicas);
-
 	if ( ( $self->numNosqlShards > 0 ) && ( $self->numNosqlReplicas > 0 ) ) {
 		die "Need to implement stopShardedReplicatedMongodb";
 	}
@@ -178,9 +175,11 @@ override 'stop' => sub {
 	# stop mongod servers
 	$self->stopMongodServers($dblog);
 		
-	$self->cleanLogFiles();
-	$self->cleanStatsFiles();
-
+	my $nosqlServersRef = $self->appInstance->getActiveServicesByType('nosqlServer');
+	foreach my $nosqlServer (@$nosqlServersRef) {	
+		$nosqlServer->cleanLogFiles();
+		$nosqlServer->cleanStatsFiles();
+	}
 };
 
 sub stopMongodServers {
