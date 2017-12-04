@@ -381,7 +381,7 @@ sub startMongocServers {
 	my @configSvrPorts;
 
 	my $curCfgSvr = 1;
-	my $configdbString = "auction$suffix-config/";
+	my $configdbString = "";
 	my $nosqlServersRef = $self->appInstance->getActiveServicesByType('nosqlServer');
 	while ( $curCfgSvr <= $self->numConfigServers ) {
 
@@ -401,6 +401,8 @@ sub startMongocServers {
 			}
 			if ( $configdbString ne "" ) {
 				$configdbString .= ",";
+			} else {
+				$configdbString = "auction$suffix-config/";
 			}
 			$configdbString .= "$mongoHostname:$configPort";
 			push @configSvrHostnames, $mongoHostname;
