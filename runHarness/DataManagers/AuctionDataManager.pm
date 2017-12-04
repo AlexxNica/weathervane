@@ -824,9 +824,12 @@ sub isDataLoaded {
 		$auctions = ceil( $users / $self->getParamValue('usersPerAuctionScaleFactor') );
 	}
 
+	my $nosqlServicesRef = $self->appInstance->getActiveServicesByType("nosqlServer");
+	my $nosqlService = $nosqlServicesRef->[0];
+
 	my $dbPrepOptions = " -a $auctions -c ";
-	$dbPrepOptions .= " -m " . $self->appInstance->numNosqlShards . " ";
-	$dbPrepOptions .= " -p " . $self->appInstance->numNosqlReplicas . " ";
+	$dbPrepOptions .= " -m " . $nosqlService->numNosqlShards . " ";
+	$dbPrepOptions .= " -p " . $nosqlService->numNosqlReplicas . " ";
 
 	my $maxDuration = $self->getParamValue('maxDuration');
 	my $totalTime =
@@ -839,11 +842,9 @@ sub isDataLoaded {
 
 	my $dbLoaderClasspath = $self->dbLoaderClasspath;
 
-	my $nosqlServicesRef = $self->appInstance->getActiveServicesByType("nosqlServer");
 	my $nosqlHostname;
 	my $mongodbPort;
 	if ( $self->appInstance->numNosqlShards == 0 ) {
-		my $nosqlService = $nosqlServicesRef->[0];
 		$nosqlHostname = $nosqlService->getIpAddr();
 		$mongodbPort   = $nosqlService->portMap->{'mongod'};
 	}

@@ -104,7 +104,7 @@ override 'initialize' => sub {
 			}
 			$numNosqlShards = $numNosqlServers;
 			$self->numNosqlShards($numNosqlServers);
-			$logger->debug("MongoDB Start.  MongoDB is sharded with $numNosqlShards shards");
+			$logger->debug("MongoDB .  MongoDB is sharded with $numNosqlShards shards");
 		}
 	}
 	elsif ($replicated) {
@@ -116,7 +116,7 @@ override 'initialize' => sub {
 		}
 		$numNosqlReplicas = $numNosqlServers / $replicasPerShard ;
 		$self->numNosqlReplicas($numNosqlReplicas);
-		$logger->debug("MongoDB Start.  MongoDB is replicated with $numNosqlReplicas replicas");
+		$logger->debug("MongoDB .  MongoDB is replicated with $numNosqlReplicas replicas");
 	}
 	else {
 		if ( $numNosqlServers > 1 ) {
@@ -125,7 +125,7 @@ override 'initialize' => sub {
 			);
 			exit(-1);
 		}
-		$logger->debug("MongoDB Start.  MongoDB is not sharded or replicated.");
+		$logger->debug("MongoDB .  MongoDB is not sharded or replicated.");
 	}
 	
 	my $instanceNumber = $self->getParamValue('instanceNum');
@@ -151,7 +151,8 @@ override 'stop' => sub {
 	my ($self, $serviceType, $logPath)            = @_;
 	my $logger = get_logger("Weathervane::Services::MongodbService");
 	my $console_logger   = get_logger("Console");
-	my $logName     = "$logPath/StopMongodb.log";
+	my $time     = `date +%H:%M`;
+	my $logName     = "$logPath/StopMongodb-$time.log";
 	my $appInstance = $self->appInstance;
 	
 	$logger->debug("MongoDB Stop");
@@ -285,7 +286,8 @@ override 'start' => sub {
 	my ($self, $serviceType, $users, $logPath)            = @_;
 	my $logger = get_logger("Weathervane::Services::MongodbService");
 	my $console_logger   = get_logger("Console");
-	my $logName     = "$logPath/StartMongodb.log";
+	my $time     = `date +%H:%M`;
+	my $logName     = "$logPath/StartMongodb-$time.log";
 	my $appInstance = $self->appInstance;
 	
 	$logger->debug("MongoDB Start");
