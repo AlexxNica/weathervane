@@ -150,13 +150,13 @@ sub stopInstance {
 	my ( $self, $logPath ) = @_;
 	my $appInstance = $self->appInstance;
 
-	if ( ( $appInstance->numNosqlShards > 0 ) && ( $appInstance->numNosqlReplicas > 0 ) ) {
+	if ( ( $self->numNosqlShards > 0 ) && ( $self->numNosqlReplicas > 0 ) ) {
 		$self->stopShardedReplicatedMongodb($logPath);
 	}
-	elsif ( $appInstance->numNosqlShards > 0 ) {
+	elsif ( $self->numNosqlShards > 0 ) {
 		$self->stopShardedMongodb($logPath);
 	}
-	elsif ( $appInstance->numNosqlReplicas > 0 ) {
+	elsif ( $self->numNosqlReplicas > 0 ) {
 		$self->stopReplicatedMongodb($logPath);
 	}
 	else {
