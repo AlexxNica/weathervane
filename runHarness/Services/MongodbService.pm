@@ -350,7 +350,7 @@ sub startMongodServers {
 		# start the mongod on this host
 		print $dblog "Starting mongod on $hostname, isReplicated = $isReplicated\n";
 		$logger->debug("Starting mongod on $hostname, isReplicated = $isReplicated");
-		my $sshConnectString = $self->host->sshConnectString;
+		my $sshConnectString = $nosqlServer->host->sshConnectString;
 
 		my $cmdString = "$sshConnectString mongod -f /etc/mongod.conf ";
 		if ($isReplicated) {
