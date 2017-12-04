@@ -266,9 +266,9 @@ sub stopMongosServers {
 		print $dblog "Checking whether mongos is running on $appHostname\n";
 
 		# first make sure the mongos is running.  If so, stop it.
-		$cmdOut = `$appSshConnectString \"ps x | grep mongo | grep -v grep\"`;
+		my $cmdOut = `$appSshConnectString \"ps x | grep mongo | grep -v grep\"`;
 		print $dblog "ps output on $appHostname: $cmdOut\n";
-		@lines = split /\n/, $cmdOut;
+		my @lines = split /\n/, $cmdOut;
 		foreach my $line (@lines) {
 			if ( $line =~ /\s*(\d+)\s.*mongos\.conf/ ) {
 				my $pid = $1;
