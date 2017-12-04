@@ -295,12 +295,12 @@ override 'start' => sub {
 	  || die "Error opening /$logName:$!";
 	print $dblog $self->meta->name . " In MongodbService::start\n";
 		
-	$nosqlServer->portMap->{'mongod'}  = $nosqlServer->internalPortMap->{'mongod'};
-	$nosqlServer->portMap->{'mongoc1'} = $nosqlServer->internalPortMap->{'mongoc1'};
-	$nosqlServer->portMap->{'mongoc2'} = $nosqlServer->internalPortMap->{'mongoc2'};
-	$nosqlServer->portMap->{'mongoc3'} = $nosqlServer->internalPortMap->{'mongoc3'};
-	$nosqlServer->registerPortsWithHost();
-
+	my $nosqlServersRef = $self->appInstance->getActiveServicesByType('nosqlServer');
+	foreach my $nosqlServer (@$nosqlServersRef) {	
+		$nosqlServer->setExternalPortNumbers();
+		$nosqlServer->registerPortsWithHost();
+	}
+	
 	# Set up the configuration files for all of the hosts to be part of the service
 	$self->configure($dblog, $serviceType, $users, $self->numNosqlShards, $self->numNosqlReplicas);
 
