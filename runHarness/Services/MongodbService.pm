@@ -148,7 +148,7 @@ override 'initialize' => sub {
 
 # Stop all of the services needed for the MongoDB service
 override 'stop' => sub {
-	my ($self, $serviceType, $users, $logPath)            = @_;
+	my ($self, $serviceType, $logPath)            = @_;
 	my $logger = get_logger("Weathervane::Services::MongodbService");
 	my $console_logger   = get_logger("Console");
 	my $logName     = "$logPath/StopMongodb.log";
