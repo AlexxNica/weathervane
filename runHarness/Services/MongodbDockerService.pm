@@ -552,11 +552,22 @@ sub configure {
 
 sub configureAfterStart {
 	my ($self, $logPath)            = @_;
+	my $console_logger   = get_logger("Console");
+	my $name     = $self->getParamValue('dockerName');
+	my $host = $self->host;
+	my $hostname = $self->host->hostName;
+	my $impl     = $self->getImpl();
+
+	my $logName = "$logPath/ConfigureAfterStartMongodbDocker-$hostname-$name.log";
+	my $applog;
+	open( $applog, ">$logName" )
+	  || die "Error opening /$logName:$!";
 
 	if ($self->configuredAfterStart) {
 		return;
 	}
 	$self->configuredAfterStart(1);
+	my $appInstance = $self->appInstance;
 
 	my $nosqlServersRef = $appInstance->getActiveServicesByType('nosqlServer');
 	my $cmdout;
@@ -769,6 +780,8 @@ sub configureAfterStart {
 		}
 
 	}
+	
+	close $applog;
 
 }
 

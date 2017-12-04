@@ -888,50 +888,6 @@ sub isDataLoaded {
 
 }
 
-sub waitForMongodbReplicaSync {
-	my ( $self, $runLog ) = @_;
-	my $console_logger = get_logger("Console");
-	my $logger         = get_logger("Weathervane::DataManager::AuctionDataManager");
-
-	my $workloadNum    = $self->getParamValue('workloadNum');
-	my $appInstanceNum = $self->getParamValue('appInstanceNum');
-	$logger->debug( "waitFormongodbReplicaSync for workload $workloadNum, appInstance $appInstanceNum" );
-
-	my $nosqlServersRef  = $self->appInstance->getActiveServicesByType('nosqlServer');
-	my $nosqlServer      = $nosqlServersRef->[0];
-	my $nosqlHostname    = $nosqlServer->getIpAddr();
-	my $port             = $nosqlServer->portMap->{'mongod'};
-	my $sshConnectString = $self->host->sshConnectString;
-	my $inSync           = 0;
-	while ( !$inSync ) {
-		sleep 30;
-
-		my $time1 = -1;
-		my $time2 = -1;
-		$inSync = 1;
-		print $runLog "Checking MongoDB Replica Sync.  rs.status: \n";
-		my $cmdString = "mongo --host $nosqlHostname --port $port --eval 'printjson(rs.status())'";
-		my $cmdout = `$cmdString`;
-		print $runLog $cmdout;
-
-		my @lines = split /\n/, $cmdout;
-
-		# Parse rs.status to see if timestamp is same on primary and secondaries
-		foreach my $line (@lines) {
-			if ( $line =~ /\"optime\"\s*:\s*Timestamp\((\d+)\,\s*(\d+)/ ) {
-				if ( $time1 == -1 ) {
-					$time1 = $1;
-					$time2 = $2;
-				}
-				elsif ( ( $time1 != $1 ) || ( $time2 != $2 ) ) {
-					print $runLog "Not yet in sync\n";
-					$inSync = 0;
-					last;
-				}
-			}
-		}
-	}
-}
 
 sub cleanData {
 	my ( $self, $users, $logPath ) = @_;

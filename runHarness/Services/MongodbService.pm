@@ -73,48 +73,6 @@ override 'initialize' => sub {
 	my $console_logger = get_logger("Console");
 	my $appInstance    = $self->appInstance;
 
-	# If it hasn't already been done, figure out how many shards, and how many
-	# replicas per shard.
-	if ( !$appInstance->has_numNosqlShards ) {
-		my $replicasPerShard = $self->getParamValue('nosqlReplicasPerShard');
-		my $sharded          = $self->getParamValue('nosqlSharded');
-		my $replicated       = $self->getParamValue('nosqlReplicated');
-
-		if ($sharded) {
-			if ($replicated) {
-				$console_logger->error("Configuring MongoDB as both sharded and replicated is not yet supported.");
-				exit(-1);
-			}
-			if ( $numNosqlServers < 2 ) {
-				$console_logger->error("When sharding MongoDB, the number of servers must be greater than 1.");
-				exit(-1);
-			}
-			$appInstance->numNosqlShards($numNosqlServers);
-			$appInstance->numNosqlReplicas(0);
-		}
-		elsif ($replicated) {
-			if ( ( $numNosqlServers % $replicasPerShard ) > 0 ) {
-				$console_logger->error(
-"When replicating MongoDB, the number of servers must be an even multiple of the number of replicas-per-shard."
-				);
-				exit(-1);
-			}
-			$appInstance->numNosqlShards(0);
-			$appInstance->numNosqlReplicas( $numNosqlServers / $replicasPerShard );
-		}
-		else {
-			if ( $numNosqlServers > 1 ) {
-				$console_logger->error(
-"When the number of MongoDB servers is greater than 1, the deployment must be sharded or replicated."
-				);
-				exit(-1);
-			}
-			$appInstance->numNosqlShards(0);
-			$appInstance->numNosqlReplicas(0);
-		}
-
-	}
-
 	super();
 };
 
@@ -395,117 +353,126 @@ sub stopSingleMongodb {
 	close $dblog;
 }
 
-sub startInstance {
-	my ( $self, $logPath ) = @_;
-	my $logger      = get_logger("Weathervane::Services::MongodbService");
-	my $appInstance = $self->appInstance;
+# Configure and Start all of the services needed for the 
+# MongoDB service
+override 'start' => sub {
+	my ($self, $serviceType, $users, $logPath)            = @_;
+	my $logger = get_logger("Weathervane::Services::MongodbService");
+	my $logName     = "$logPath/StartMongodb.log";
+	
+	$logger->debug("MongoDB Start");
+	
+	my $dblog;
+	open( $dblog, ">$logName" )
+	  || die "Error opening /$logName:$!";
+	print $dblog $self->meta->name . " In MongodbService::start\n";
 
-	$self->portMap->{'mongod'}  = $self->internalPortMap->{'mongod'};
-	$self->portMap->{'mongoc1'} = $self->internalPortMap->{'mongoc1'};
-	$self->portMap->{'mongoc2'} = $self->internalPortMap->{'mongoc2'};
-	$self->portMap->{'mongoc3'} = $self->internalPortMap->{'mongoc3'};
-	$self->registerPortsWithHost();
+	# Figure out how many shards, and how many replicas per shard.
+	my $replicasPerShard = $self->getParamValue('nosqlReplicasPerShard');
+	my $sharded          = $self->getParamValue('nosqlSharded');
+	my $replicated       = $self->getParamValue('nosqlReplicated');
+	my $numNosqlServers = $appInstance->getNumActiveOfServiceType('nosqlServer');
 
-	$logger->debug(
-		"Internal mongodb port is ",   $self->internalPortMap->{'mongod'},
-		", External mongodb port is ", $self->portMap->{'mongod'}
-	);
-
-	if ( ( $appInstance->numNosqlShards > 0 ) && ( $appInstance->numNosqlReplicas > 0 ) ) {
-		$self->startShardedReplicatedMongodb($logPath);
+	# Determine the number of shards and replicas-per-shard
+	my $numNosqlShards = 0;
+	my $numNosqlReplicas = 0;
+	if ($sharded) {
+		if ($replicated) {
+			$console_logger->error("Configuring MongoDB as both sharded and replicated is not yet supported.");
+			exit(-1);
+		} else {
+			if ( $numNosqlServers < 2 ) {
+				$console_logger->error("When sharding MongoDB, the number of servers must be greater than 1.");
+				exit(-1);
+			}
+			$numNosqlShards = $numNosqlServers;
+			$logger->debug("MongoDB Start.  MongoDB is sharded with $numNosqlShards shards");
+			print $dbLog "MongoDB Start.  MongoDB is sharded with $numNosqlShards shards";
+		}
 	}
-	elsif ( $appInstance->numNosqlShards > 0 ) {
-		$self->startShardedMongodb($logPath);
-	}
-	elsif ( $appInstance->numNosqlReplicas > 0 ) {
-		$self->startReplicatedMongodb($logPath);
+	elsif ($replicated) {
+		if ( ( $numNosqlServers % $replicasPerShard ) > 0 ) {
+			$console_logger->error(
+"When replicating MongoDB, the number of servers must be an even multiple of the number of replicas-per-shard ($replicasPerShard)."
+			);
+			exit(-1);
+		}
+		$numNosqlReplicas = $numNosqlServers / $replicasPerShard ;
+		$logger->debug("MongoDB Start.  MongoDB is replicated with $numNosqlReplicas replicas");
+		print $dbLog "MongoDB Start.  MongoDB is replicated with $numNosqlReplicas replicas";
 	}
 	else {
-		$self->startSingleMongodb($logPath);
+		if ( $numNosqlServers > 1 ) {
+			$console_logger->error(
+"When the number of MongoDB servers is greater than 1, the deployment must be sharded or replicated."
+			);
+			exit(-1);
+		}
+		$logger->debug("MongoDB Start.  MongoDB is not sharded or replicated.");
+		print $dbLog "MongoDB Start.  MongoDB is not sharded or replicated.";
+	}
+		
+	# Set up the configuration files for all of the hosts to be part of the service
+	$self->configure($dbLog, $serviceType, $users, $numNosqlShards, $numNosqlReplicas);
+
+	my $isReplicated = 0;
+	if ( ( $appInstance->numNosqlShards > 0 ) && ( $appInstance->numNosqlReplicas > 0 ) ) {
+		die "Need to implement startShardedReplicatedMongodb";
+	}
+	elsif ( $appInstance->numNosqlShards > 0 ) {
+		# start config servers
+		my $configdbString = $self->startMongocServers($dbLog);
+
+		# start shards
+		$self->startMongodServers($isReplicated, $dbLog);
+		
+		# start mongos servers
+		my $mongosHostPortListRef = $self->startMongosServers($configdbString, $dbLog);
+		my $mongosHostname = $mongosHostPortListRef->[0];
+		my $mongosPort = $mongosHostPortListRef->[1];
+		
+		# add the shards and shard the collections		
+		$self->configureSharding($mongosHostname, $mongosPort, $dbLog);
+	}
+	elsif ( $appInstance->numNosqlReplicas > 0 ) {
+		$isReplicated = 1;
+		$self->startMongodServers($isReplicated, $dbLog);
+	}
+	else {
+		$self->startMongodServers($isReplicated, $dbLog);
 	}
 
 	$self->host->startNscd();
 
 }
 
-sub startShardedMongodb {
-	my ( $self, $logPath ) = @_;
+sub startMongodServers {
+	my ( $self, $isReplicated, $dblog ) = @_;
 	my $logger = get_logger("Weathervane::Services::MongodbService");
+	
+	print $dblog "Starting mongod servers\n";
+	$logger->debug("Starting mongod servers");
 
-	my $hostname    = $self->host->hostName;
-	my $logName     = "$logPath/StartShardedMongodb-$hostname.log";
-	my $appInstance = $self->appInstance;
+	#  start all of the mongod servers
+	my $nosqlServersRef = $self->appInstance->getActiveServicesByType('nosqlServer');
+	foreach my $nosqlServer (@$nosqlServersRef) {	
 
-	my $dblog;
-	open( $dblog, ">$logName" )
-	  || die "Error opening /$logName:$!";
-	print $dblog $self->meta->name . " In MongodbService::startShardedMongodb\n";
-	print $dblog "$hostname has shardNum " . $self->shardNum . " and replicaNum " . $self->replicaNum . "\n";
+		$nosqlServer->portMap->{'mongod'}  = $nosqlServer->internalPortMap->{'mongod'};
+		$nosqlServer->portMap->{'mongoc1'} = $nosqlServer->internalPortMap->{'mongoc1'};
+		$nosqlServer->portMap->{'mongoc2'} = $nosqlServer->internalPortMap->{'mongoc2'};
+		$nosqlServer->portMap->{'mongoc3'} = $nosqlServer->internalPortMap->{'mongoc3'};
+		$nosqlServer->registerPortsWithHost();
 
-	if ( !$self->isRunning($dblog) ) {
-		$logger->debug( "MongoDB is not running on $hostname with shardNum "
-			  . $self->shardNum
-			  . " and replicaNum "
-			  . $self->replicaNum );
-		my $cmdOut;
-
-		# If this is the first MongoDB service to run,
-		# then configure the numShardsProcessed variable
-		if ( !$appInstance->has_numShardsProcessed() ) {
-			print $dblog "Setting numShardsProcessed to 1.\n";
-			$appInstance->numShardsProcessed(1);
-		}
-		else {
-			my $numShardsProcessed = $appInstance->numShardsProcessed;
-			print $dblog "Incrementing numShardsProcessed from $numShardsProcessed \n";
-			$appInstance->numShardsProcessed( $numShardsProcessed + 1 );
-		}
-
-		my $configdbString = "";
-
-		# if this is the first mongodbService then start the config servers
-		if ( $appInstance->numShardsProcessed == 1 ) {
-			print $dblog "Processing first shard.  Starting config servers\n";
-			$logger->debug("Processing first shard on $hostname");
-
-			my $curCfgSvr = 1;
-			while ( $curCfgSvr <= $self->numConfigServers ) {
-				my $nosqlServersRef = $self->appInstance->getActiveServicesByType('nosqlServer');
-
-				foreach my $nosqlServer (@$nosqlServersRef) {
-					my $configPort = $self->portMap->{"mongoc$curCfgSvr"};
-
-					my $mongoHostname    = $nosqlServer->host->hostName;
-					my $sshConnectString = $nosqlServer->host->sshConnectString;
-
-					# Start a config server on this host
-					print $dblog "Starting configserver$curCfgSvr on $mongoHostname\n";
-					$logger->debug("Starting configserver$curCfgSvr on $mongoHostname");
-					$cmdOut = `$sshConnectString mongod -f /etc/mongoc$curCfgSvr.conf 2>&1`;
-					print $dblog "$sshConnectString mongod -f /etc/mongoc$curCfgSvr.conf 2>&1\n";
-					print $dblog $cmdOut;
-					if ( !( $cmdOut =~ /success/ ) ) {
-						die "Couldn't start configserver$curCfgSvr on $mongoHostname : $cmdOut\n";
-					}
-					if ( $configdbString ne "" ) {
-						$configdbString .= ",";
-					}
-					$configdbString .= "$mongoHostname:$configPort";
-					$curCfgSvr++;
-					if ( $curCfgSvr > $self->numConfigServers ) {
-						last;
-					}
-				}
-			}
-
-			$appInstance->configDbString($configdbString);
-		}
-
-		# start the shard on this host
-		print $dblog "Starting mongod on $hostname\n";
-		$logger->debug("Starting mongodb shard on $hostname");
+		# start the mongod on this host
+		print $dblog "Starting mongod on $hostname, isReplicated = $isReplicated\n";
+		$logger->debug("Starting mongod on $hostname, isReplicated = $isReplicated");
 		my $sshConnectString = $self->host->sshConnectString;
 
+		my $cmdString = "$sshConnectString mongod -f /etc/mongod.conf ";
+		if ($isReplicated) {
+			my $replicaName      = "auction" . $self->shardNum;
+			$cmdString .= " --replSet=$replicaName ";
+		}
 		$cmdOut = `$sshConnectString mongod -f /etc/mongod.conf 2>&1`;
 		print $dblog "$sshConnectString mongod -f /etc/mongod.conf 2>&1\n";
 		print $dblog $cmdOut;
@@ -513,439 +480,141 @@ sub startShardedMongodb {
 			print $dblog "Couldn't start mongod on $hostname : $cmdOut\n";
 			die "Couldn't start mongod on $hostname : $cmdOut\n";
 		}
-
-		# If this is the last mongoService, start the mongos instances on the
-		# app servers and primary driver.  Don't start multiple mongos on the same
-		# host if multiple app served are running on the same host
-		if ( $appInstance->numShardsProcessed == $appInstance->numNosqlShards ) {
-			$logger->debug("Processing last shard on $hostname");
-
-			$configdbString = $appInstance->configDbString;
-			my $appServersRef = $self->appInstance->getActiveServicesByType('appServer');
-
-			my %hostsMongosStarted;
-
-			foreach my $appServer (@$appServersRef) {
-				my $appHostname = $appServer->host->hostName;
-				my $appIpAddr   = $appServer->host->ipAddr;
-				$appServer->internalPortMap->{'mongos'} = $self->internalPortMap->{ 'mongos-' . $appIpAddr };
-
-				if ( exists $hostsMongosStarted{$appIpAddr} ) {
-
-					# If a mongos has already been started on this host,
-					# Don't start another one
-					$logger->debug("A mongos is already started on $appHostname.  Not starting another");
-					next;
-				}
-
-				$hostsMongosStarted{$appIpAddr} = 1;
-
-				# Copy config files to app servers
-				my $appSshConnectString = $appServer->host->sshConnectString;
-
-				print $dblog "Starting mongos on app server host $appHostname\n";
-				$logger->debug("Starting mongos on app server host $appHostname");
-				print $dblog "$appSshConnectString mongos -f /etc/mongos.conf --configdb $configdbString 2>&1\n";
-				$cmdOut = `$appSshConnectString mongos -f /etc/mongos.conf --configdb $configdbString 2>&1`;
-				print $dblog $cmdOut;
-				if ( !( $cmdOut =~ /success/ ) ) {
-					print $dblog "Couldn't start mongos on $appHostname : $cmdOut\n";
-					die "Couldn't start mongos on $appHostname : $cmdOut\n";
-				}
-			}
-
-			# start a mongos on the dataManager
-			my $dataManagerDriver   = $self->appInstance->dataManager;
-			my $dataManagerHostname = $dataManagerDriver->host->hostName;
-			my $dataManagerIpAddr   = $dataManagerDriver->host->ipAddr;
-			my $localMongosPort     = $dataManagerDriver->portMap->{'mongos'} =
-			  $self->internalPortMap->{"mongos-$dataManagerIpAddr"};
-			my $dataManagerSshConnectString = $dataManagerDriver->host->sshConnectString;
-
-			if ( !exists $hostsMongosStarted{$dataManagerIpAddr} ) {
-
-				print $dblog "Starting mongos on $dataManagerHostname\n";
-				$logger->debug("Starting mongos on dataManager host $dataManagerHostname");
-				print $dblog
-				  "$dataManagerSshConnectString mongos -f /etc/mongos.conf --configdb $configdbString 2>&1\n";
-				$cmdOut = `$dataManagerSshConnectString mongos -f /etc/mongos.conf --configdb $configdbString 2>&1`;
-				print $dblog $cmdOut;
-
-				if ( !( $cmdOut =~ /success/ ) ) {
-					print $dblog "Couldn't start mongos on $dataManagerHostname : $cmdOut\n";
-					die "Couldn't start mongos on $dataManagerHostname : $cmdOut\n";
-				}
-			}
-
-			# disable the balancer
-			print $dblog "Disabling the balancer.\n";
-			my $cmdString = "mongo --port $localMongosPort --eval 'sh.setBalancerState(false)'";
-			$cmdOut = `$dataManagerSshConnectString "$cmdString"`;
-			print $dblog "$dataManagerSshConnectString \"$cmdString\"\n";
-			print $dblog $cmdOut;
-
-			# If this is the last Mongodb service to be processed,
-			# then clear the static variables for the next action
-			$appInstance->clear_numShardsProcessed;
-			$appInstance->clear_configDbString;
-		}
-
-		close $dblog;
-
-	}
-}
-
-sub startReplicatedMongodb {
-	my ( $self, $logPath ) = @_;
-
-	my $hostname         = $self->host->hostName;
-	my $logName          = "$logPath/StartReplicatedMongodb-$hostname.log";
-	my $sshConnectString = $self->host->sshConnectString;
-	my $replicaName      = "auction" . $self->shardNum;
-	my $dblog;
-	open( $dblog, ">$logName" )
-	  || die "Error opening /$logName:$!";
-	print $dblog $self->meta->name . " In MongodbService::startReplicatedMongodb\n";
-
-	print $dblog "$hostname has shardNum " . $self->shardNum . " and replicaNum " . $self->replicaNum . "\n";
-
-	my $cmdOut;
-	if ( !$self->isRunning($dblog) ) {
-
-		# start the DB
-		print $dblog "Starting mongod on $hostname\n";
-		$cmdOut = `$sshConnectString mongod -f /etc/mongod.conf --replSet=$replicaName`;
-		if ( !( $cmdOut =~ /success/ ) ) {
-			print $dblog "Couldn't start mongod on $hostname : $cmdOut\n";
-			die "Couldn't start mongod on $hostname : $cmdOut\n";
-		}
-	}
-	close $dblog;
-}
-
-sub startShardedReplicatedMongodb {
-	my ( $self, $logPath ) = @_;
-
-	my $hostname = $self->host->hostName;
-	my $logName  = "$logPath/StartShardedReplicatedMongodb-$hostname.log";
-
-	my $dblog;
-	open( $dblog, ">$logName" )
-	  || die "Error opening /$logName:$!";
-	print $dblog $self->meta->name . " In MongodbService::startShardedReplicatedMongodb\n";
-	print $dblog "$hostname has shardNum " . $self->shardNum . " and replicaNum " . $self->replicaNum . "\n";
-
-	die "Need to implement startShardedReplicatedMongodb";
-
-	close $dblog;
-}
-
-sub startSingleMongodb {
-	my ( $self, $logPath ) = @_;
-
-	my $hostname         = $self->host->hostName;
-	my $logName          = "$logPath/StartSingleMongodb-$hostname.log";
-	my $sshConnectString = $self->host->sshConnectString;
-
-	my $dblog;
-	open( $dblog, ">$logName" )
-	  || die "Error opening /$logName:$!";
-
-	print $dblog $self->meta->name . " In MongodbService::startSingleMongodb\n";
-	my $cmdOut;
-	print $dblog "$hostname has shardNum " . $self->shardNum . " and replicaNum " . $self->replicaNum . "\n";
-
-	if ( !$self->isRunning($dblog) ) {
-
-		# start the DB
-		print $dblog "Starting mongod on $hostname\n";
-		$cmdOut = `$sshConnectString mongod -f /etc/mongod.conf 2>&1`;
-		if ( !( $cmdOut =~ /success/ ) ) {
-			print $dblog "Couldn't start mongod on $hostname : $cmdOut\n";
-			die "Couldn't start mongod on $hostname : $cmdOut\n";
-		}
-	}
-	close $dblog;
-
-}
-
-sub clearDataAfterStart {
-}
-
-sub clearDataBeforeStart {
-	my ( $self, $logPath ) = @_;
-	my $hostname         = $self->host->hostName;
-	my $logName          = "$logPath/MongoDB-clearData-$hostname.log";
-	my $mongodbDataDir   = $self->getParamValue('mongodbDataDir');
-	my $mongodbC1DataDir = $self->getParamValue('mongodbC1DataDir');
-	my $mongodbC2DataDir = $self->getParamValue('mongodbC2DataDir');
-	my $mongodbC3DataDir = $self->getParamValue('mongodbC3DataDir');
-
-	my $applog;
-	open( $applog, ">$logName" ) or die "Error opening $logName:$!";
-
-	my $sshConnectString = $self->host->sshConnectString;
-	print $applog "Clearing old MongoDB data on " . $hostname . "\n";
-
-	my $cmdout = `$sshConnectString \"find $mongodbDataDir/* -delete 2>&1\"`;
-	print $applog $cmdout;
-	$cmdout = `$sshConnectString \"ls -l $mongodbDataDir 2>&1\"`;
-	print $applog "After clearing, MongoDB data dir has: $cmdout";
-
-	$cmdout = `$sshConnectString \"find $mongodbC1DataDir/* -delete 2>&1\"`;
-	print $applog $cmdout;
-	$cmdout = `$sshConnectString \"ls -l $mongodbC1DataDir 2>&1\"`;
-	print $applog "After clearing, $mongodbC1DataDir has: $cmdout";
-
-	$cmdout = `$sshConnectString \"find $mongodbC2DataDir/* -delete 2>&1\"`;
-	print $applog $cmdout;
-	$cmdout = `$sshConnectString \"ls -l $mongodbC2DataDir 2>&1\"`;
-	print $applog "After clearing, $mongodbC2DataDir has: $cmdout";
-
-	$cmdout = `$sshConnectString \"find $mongodbC3DataDir/* -delete 2>&1\"`;
-	print $applog $cmdout;
-	$cmdout = `$sshConnectString \"ls -l $mongodbC3DataDir 2>&1\"`;
-	print $applog "After clearing, $mongodbC3DataDir has: $cmdout";
-
-	close $applog;
-
-}
-
-sub isUp {
-	my ( $self, $fileout ) = @_;
-
-	if ( !$self->isRunning($fileout) ) {
-		return 0;
-	}
-
-	return 1;
-
-}
-
-sub isRunning {
-	my ( $self, $fileout ) = @_;
-
-	my $sshConnectString = $self->host->sshConnectString;
-
-	my $cmdOut = `$sshConnectString \"ps x | grep mongo | grep -v grep\"`;
-	print $fileout $cmdOut;
-	if ( $cmdOut =~ /mongod\.conf/ ) {
-		return 1;
-	}
-	else {
-		return 0;
-	}
-}
-
-sub setPortNumbers {
-	my ($self)          = @_;
-	my $appInstance     = $self->appInstance;
-	my $numNosqlServers = $appInstance->getNumActiveOfServiceType('nosqlServer');
-	my $numShards       = $appInstance->numNosqlShards;
-	my $numReplicas     = $appInstance->numNosqlReplicas;
-	my $serviceType     = $self->getParamValue('serviceType');
-	my $portMultiplier  = $self->appInstance->getNextPortMultiplierByServiceType($serviceType);
-	my $portOffset      = $self->getParamValue( $serviceType . 'PortStep' ) * $portMultiplier;
-
-	my $instanceNumber = $self->getParamValue('instanceNum');
-	$self->internalPortMap->{'mongod'}  = 27017 + $portOffset;
-	$self->internalPortMap->{'mongos'}  = 27017 + $portOffset;
-	$self->internalPortMap->{'mongoc1'} = 27019;
-	$self->internalPortMap->{'mongoc2'} = 27020;
-	$self->internalPortMap->{'mongoc3'} = 27021;
-	if ( ( $numShards > 0 ) && ( $numReplicas > 0 ) ) {
-		$self->shardNum( ceil( $instanceNumber / ( 1.0 * $appInstance->numNosqlReplicas ) ) );
-		$self->replicaNum( ( $instanceNumber % $appInstance->numNosqlReplicas ) + 1 );
-		$self->internalPortMap->{'mongod'} = 27018 + $portOffset;
-	}
-	elsif ( $numShards > 0 ) {
-		$self->shardNum($instanceNumber);
-		$self->internalPortMap->{'mongod'} = 27018 + $portOffset;
-	}
-	elsif ( $numReplicas > 0 ) {
-		$self->replicaNum($instanceNumber);
-	}
-	elsif ( $numNosqlServers > 1 ) {
-		die "When not using sharding or replicas, the number of NoSQL servers must equal 1.";
-	}
-}
-
-sub setExternalPortNumbers {
-	my ($self)          = @_;
-	$self->portMap->{'mongod'}  = $self->internalPortMap->{'mongod'};
-	$self->portMap->{'mongoc1'} = $self->internalPortMap->{'mongoc1'};
-	$self->portMap->{'mongoc2'} = $self->internalPortMap->{'mongoc2'};
-	$self->portMap->{'mongoc3'} = $self->internalPortMap->{'mongoc3'};
-}
-
-override 'sanityCheck' => sub {
-	my ($self, $cleanupLogDir) = @_;
-	my $console_logger = get_logger("Console");
-	my $sshConnectString = $self->host->sshConnectString;
-	my $hostname         = $self->host->hostName;
-	my $logName          = "$cleanupLogDir/SanityCheckMongoDB-$hostname.log";
-	my $dir = $self->getParamValue('mongodbDataDir');
-
-	my $dblog;
-	open( $dblog, ">$logName" )
-	  || die "Error opening /$logName:$!";
-
-	my $cmdString = "$sshConnectString df -h $dir";
-	my $cmdout = `$cmdString`;
-	print $dblog "$cmdString\n";
-	print $dblog "$cmdout\n";
-
-	close $dblog;
-
-	if ($cmdout =~ /100\%/) {
-		$console_logger->error("Failed Sanity Check: MongoDB Data Directory $dir is full on $hostname.");
-		return 0;
-	} else {
-		return 1;
 	}
 	
-};
+}
+
+
+sub startMongocServers {
+	my ( $self, $dbLog ) = @_;
+	my $logger = get_logger("Weathervane::Services::MongodbService");
+	my $workloadNum = $self->getParamValue('workloadNum');
+	my $appInstanceNum = $self->getParamValue('appInstanceNum');
+	my $suffix = "W${workloadNum}I${appInstanceNum}";
+
+	print $dblog "Starting config servers\n";
+	$logger->debug("Starting config servers");
+	my @configSvrHostnames;
+	my @configSvrPorts;
+
+	my $curCfgSvr = 1;
+	my $configdbString = "auction$suffix-config/";
+	my $nosqlServersRef = $self->appInstance->getActiveServicesByType('nosqlServer');
+	while ( $curCfgSvr <= $self->numConfigServers ) {
+
+		foreach my $nosqlServer (@$nosqlServersRef) {
+			my $configPort = $self->portMap->{"mongoc$curCfgSvr"};
+			my $mongoHostname    = $nosqlServer->host->hostName;
+			my $sshConnectString = $nosqlServer->host->sshConnectString;
+
+			# Start a config server on this host
+			print $dblog "Starting configserver$curCfgSvr on $mongoHostname\n";
+			$logger->debug("Starting configserver$curCfgSvr on $mongoHostname");
+			$cmdOut = `$sshConnectString mongod -f /etc/mongoc$curCfgSvr.conf 2>&1`;
+			print $dblog "$sshConnectString mongod -f /etc/mongoc$curCfgSvr.conf 2>&1\n";
+			print $dblog $cmdOut;
+			if ( !( $cmdOut =~ /success/ ) ) {
+				die "Couldn't start configserver$curCfgSvr on $mongoHostname : $cmdOut\n";
+			}
+			if ( $configdbString ne "" ) {
+				$configdbString .= ",";
+			}
+			$configdbString .= "$mongoHostname:$configPort";
+			push @configSvrHostnames, $mongoHostname;
+			push @configSvrPorts, $configPort;
+			
+			$curCfgSvr++;
+			if ( $curCfgSvr > $self->numConfigServers ) {
+				last;
+			}
+		}
+	}
+
+	# Initialize config server replica set
+	# There is always a config server running on the host of the first shard
+	print $applog "Initialize configServer replica set.\n";
+	$cmdString = "mongo --host $configSvrHostnames[0] --port $configSvrPorts[0] --eval 'printjson(rs.initiate(
+		{
+			_id: \\\"auction$suffix-config\\\",
+			configsvr: true,
+			members: [
+			  { _id : 0, host : \\\"$configSvrHostnames[0]:$configSvrPorts[0]\\\" },
+      		  { _id : 1, host : \\\"$configSvrHostnames[1]:$configSvrPorts[1]\\\" },
+      		  { _id : 2, host : \\\"$configSvrHostnames[2]:$configSvrPorts[2]\\\" }
+    			]
+		}))'";
+	my $cmdout = `$cmdString`;
+	print $dbLog "$cmdString\n";
+	print $dbLog $cmdout;
+
+	# Wait for the config server replica set to be in sync
+	$self->waitForMongodbReplicaSync($configSvrHostnames[0], $configSvrPorts[0], $dbLog);
+
+	return $configdbString;
+
+}
+
+sub startMongosServers {
+	my ( $self, $configdbString, $dbLog ) = @_;
+	my $logger = get_logger("Weathervane::Services::MongodbService");
+
+	print $dblog "Starting mongos servers\n";
+	$logger->debug("Starting mongos servers");
+	my @mongosSvrHostnames;
+	my @mongosSvrPorts;
+
+	my $appServersRef = $self->appInstance->getActiveServicesByType('appServer');
+	my %hostsMongosStarted;
+	foreach my $appServer (@$appServersRef) {
+		my $appHostname = $appServer->host->hostName;
+		my $appIpAddr   = $appServer->host->ipAddr;
+		$appServer->internalPortMap->{'mongos'} = $self->internalPortMap->{ 'mongos-' . $appIpAddr };
+
+		if ( exists $hostsMongosStarted{$appIpAddr} ) {
+			# If a mongos has already been started on this host,
+			# Don't start another one
+			$logger->debug("A mongos is already started on $appHostname.  Not starting another");
+			next;
+		}
+		push @mongosSvrHostnames, $appHostname;
+		push @mongosSvrPorts, $self->internalPortMap->{ 'mongos-' . $appIpAddr };
+
+		$hostsMongosStarted{$appIpAddr} = 1;
+
+		# Copy config files to app servers
+		my $appSshConnectString = $appServer->host->sshConnectString;
+
+		print $dblog "Starting mongos on app server host $appHostname\n";
+		$logger->debug("Starting mongos on app server host $appHostname");
+		print $dblog "$appSshConnectString mongos -f /etc/mongos.conf --configdb $configdbString 2>&1\n";
+		$cmdOut = `$appSshConnectString mongos -f /etc/mongos.conf --configdb $configdbString 2>&1`;
+		print $dblog $cmdOut;
+		if ( !( $cmdOut =~ /success/ ) ) {
+			print $dblog "Couldn't start mongos on $appHostname : $cmdOut\n";
+			die "Couldn't start mongos on $appHostname : $cmdOut\n";
+		}
+	}
+
+	return [$mongosSvrHostnames[0], $mongosSvrPorts[0]];
+}
+
 
 sub configure {
-	my ( $self, $logPath, $users, $suffix ) = @_;
+	my ( $self, $dbLog, $serviceType, $users, $numShards, $numReplicas ) = @_;
 	my $logger = get_logger("Weathervane::Services::MongodbService");
 	$logger->debug("Configure mongodb");
+	print $dbLog "Configure MongoDB\n";
 
-	my $sshConnectString = $self->host->sshConnectString;
+	my $workloadNum = $self->getParamValue('workloadNum');
+	my $appInstanceNum = $self->getParamValue('appInstanceNum');
+	my $suffix = "W${workloadNum}I${appInstanceNum}";
+	
 	my $hostname         = $self->host->hostName;
-	my $logName          = "$logPath/ConfigureMongodb-$hostname.log";
-	my $appInstance      = $self->appInstance;
-
-	my $numNosqlServers = $appInstance->getNumActiveOfServiceType('nosqlServer');
-	my $numShards       = $appInstance->numNosqlShards;
-	my $numReplicas     = $appInstance->numNosqlReplicas;
-	my $serviceType     = $self->getParamValue('serviceType');
-	my $portMultiplier  = $self->appInstance->getNextPortMultiplierByServiceType($serviceType);
-	my $portOffset      = $self->getParamValue( $serviceType . 'PortStep' ) * $portMultiplier;
-
-	my $dblog;
-	open( $dblog, ">$logName" )
-	  || die "Error opening /$logName:$!";
-
-	print $dblog $self->meta->name . " In MongodbService::ConfigureMongodb\n";
-
-	my $dir = $self->getParamValue('mongodbDataDir');
-	`$sshConnectString mkdir -p $dir`;
-	$dir = $self->getParamValue('mongodbC1DataDir');
-	`$sshConnectString mkdir -p $dir`;
-	$dir = $self->getParamValue('mongodbC2DataDir');
-	`$sshConnectString mkdir -p $dir`;
-	$dir = $self->getParamValue('mongodbC3DataDir');
-	`$sshConnectString mkdir -p $dir`;
-
-	if ( $self->getParamValue('mongodbUseTHP') ) {
-		my $cmdOut = `$sshConnectString \"echo always > /sys/kernel/mm/transparent_hugepage/enabled\"`;
-		$cmdOut = `$sshConnectString \"echo always > /sys/kernel/mm/transparent_hugepage/defrag\"`;
-	}
-	else {
-
-		# Turn off transparent huge pages
-		my $cmdOut = `$sshConnectString \"echo never > /sys/kernel/mm/transparent_hugepage/enabled\"`;
-		$cmdOut = `$sshConnectString \"echo never > /sys/kernel/mm/transparent_hugepage/defrag\"`;
-	}
-
-	my $scpConnectString = $self->host->scpConnectString;
-	my $scpHostString    = $self->host->scpHostString;
 	my $configDir        = $self->getParamValue('configDir');
+	my $appInstance      = $self->appInstance;	
 
-	if ( ( $numShards > 0 ) && ( $appInstance->numNosqlReplicas > 0 ) ) {
-		open( FILEIN, "$configDir/mongodb/mongod-shardReplica.conf" )
-		  or die "Error opening $configDir/mongodb/mongod-shardReplica.conf:$!";
-		open( FILEOUT, ">/tmp/mongod$suffix.conf" ) or die "Error opening /tmp/mongod$suffix.conf:$!";
-		while ( my $inline = <FILEIN> ) {
-			if ( $inline =~ /port:/ ) {
-				print FILEOUT "    port: " . $self->internalPortMap->{'mongod'} . "\n";
-			}
-			elsif ( $inline =~ /dbPath:/ ) {
-				print FILEOUT "    dbPath: \"" . $self->getParamValue('mongodbDataDir') . "\"\n";
-			}
-			else {
-				print FILEOUT $inline;
-			}
-		}
-		close FILEIN;
-		close FILEOUT;
-		`$scpConnectString /tmp/mongod$suffix.conf root\@$scpHostString:/etc/mongod.conf`;
-	}
-
-	if ( ( $numShards > 0 ) && ( $appInstance->numNosqlReplicas == 0 ) ) {
-		open( FILEIN, "$configDir/mongodb/mongod-sharded.conf" )
-		  or die "Error opening $configDir/mongodb/mongod-sharded.conf:$!";
-		open( FILEOUT, ">/tmp/mongod$suffix.conf" ) or die "Error opening /tmp/mongod$suffix.conf:$!";
-		while ( my $inline = <FILEIN> ) {
-			if ( $inline =~ /port:/ ) {
-				print FILEOUT "    port: " . $self->internalPortMap->{'mongod'} . "\n";
-			}
-			elsif ( $inline =~ /dbPath:/ ) {
-				print FILEOUT "    dbPath: \"" . $self->getParamValue('mongodbDataDir') . "\"\n";
-			}
-			else {
-				print FILEOUT $inline;
-			}
-		}
-		close FILEIN;
-		close FILEOUT;
-		`$scpConnectString /tmp/mongod$suffix.conf root\@$scpHostString:/etc/mongod.conf`;
-	}
-
-	if ( ( $numShards == 0 ) && ( $appInstance->numNosqlReplicas > 0 ) ) {
-		open( FILEIN, "$configDir/mongodb/mongod-replica.conf" )
-		  or die "Error opening $configDir/mongodb/mongod-replica.conf:$!";
-		open( FILEOUT, ">/tmp/mongod$suffix.conf" ) or die "Error opening /tmp/mongod$suffix.conf:$!";
-		while ( my $inline = <FILEIN> ) {
-			if ( $inline =~ /port:/ ) {
-				print FILEOUT "    port: " . $self->internalPortMap->{'mongod'} . "\n";
-			}
-			elsif ( $inline =~ /dbPath:/ ) {
-				print FILEOUT "    dbPath: \"" . $self->getParamValue('mongodbDataDir') . "\"\n";
-			}
-			else {
-				print FILEOUT $inline;
-			}
-		}
-		close FILEIN;
-		close FILEOUT;
-		`$scpConnectString /tmp/mongod$suffix.conf root\@$scpHostString:/etc/mongod.conf`;
-	}
-
-	if ( ( $numShards == 0 ) && ( $appInstance->numNosqlReplicas == 0 ) ) {
-		open( FILEIN, "$configDir/mongodb/mongod-unsharded.conf" )
-		  or die "Error opening $configDir/mongodb/mongod-unsharded.conf:$!";
-		open( FILEOUT, ">/tmp/mongod$suffix.conf" ) or die "Error opening /tmp/mongod$suffix.conf:$!";
-		while ( my $inline = <FILEIN> ) {
-			if ( $inline =~ /port:/ ) {
-				print FILEOUT "    port: " . $self->internalPortMap->{'mongod'} . "\n";
-			}
-			elsif ( $inline =~ /dbPath:/ ) {
-				print FILEOUT "    dbPath: \"" . $self->getParamValue('mongodbDataDir') . "\"\n";
-			}
-			else {
-				print FILEOUT $inline;
-			}
-		}
-		close FILEIN;
-		close FILEOUT;
-		`$scpConnectString /tmp/mongod$suffix.conf root\@$scpHostString:/etc/mongod.conf`;
-	}
-
-	if ( $numShards > 0 ) {
-
-		# If this is the first MongoDB service to be configured,
-		# then configure the numShardsProcessed variable
-		if ( !$appInstance->has_numShardsProcessed() ) {
-			print $dblog "Setting numShardsProcessed to 1\n";
-			$appInstance->numShardsProcessed(1);
-		}
-		else {
-			print $dblog "Incrementing numShardsProcessed from " . $appInstance->numShardsProcessed . "\n";
-			$appInstance->numShardsProcessed( $appInstance->numShardsProcessed + 1 );
-		}
-
+	# Set up configuration files for the config servers if needed
+	if (( $numShards > 0 ) && ($numReplicas == 0)) {
 		open( FILEIN, "$configDir/mongodb/mongoc1.conf" )
 		  or die "Error opening $configDir/mongodb/mongod-mongoc1.conf:$!";
 		open( FILEOUT, ">/tmp/mongoc1$suffix.conf" ) or die "Error opening /tmp/mongoc1$suffix.conf:$!";
@@ -956,13 +625,15 @@ sub configure {
 			elsif ( $inline =~ /dbPath:/ ) {
 				print FILEOUT "    dbPath: \"" . $self->getParamValue('mongodbC1DataDir') . "\"\n";
 			}
+			elsif ( $inline =~ /replSetName:/ ) {
+				print FILEOUT "    replSetName: auction$suffix-config\n";
+			}
 			else {
 				print FILEOUT $inline;
 			}
 		}
 		close FILEIN;
 		close FILEOUT;
-		`$scpConnectString /tmp/mongoc1$suffix.conf root\@$scpHostString:/etc/mongoc1.conf`;
 
 		open( FILEIN, "$configDir/mongodb/mongoc2.conf" )
 		  or die "Error opening $configDir/mongodb/mongod-mongoc2.conf:$!";
@@ -974,13 +645,15 @@ sub configure {
 			elsif ( $inline =~ /dbPath:/ ) {
 				print FILEOUT "    dbPath: \"" . $self->getParamValue('mongodbC2DataDir') . "\"\n";
 			}
+			elsif ( $inline =~ /replSetName:/ ) {
+				print FILEOUT "    replSetName: auction$suffix-config\n";
+			}
 			else {
 				print FILEOUT $inline;
 			}
 		}
 		close FILEIN;
 		close FILEOUT;
-		`$scpConnectString /tmp/mongoc2$suffix.conf root\@$scpHostString:/etc/mongoc2.conf`;
 
 		open( FILEIN, "$configDir/mongodb/mongoc3.conf" )
 		  or die "Error opening $configDir/mongodb/mongod-mongoc3.conf:$!";
@@ -992,107 +665,341 @@ sub configure {
 			elsif ( $inline =~ /dbPath:/ ) {
 				print FILEOUT "    dbPath: \"" . $self->getParamValue('mongodbC3DataDir') . "\"\n";
 			}
+			elsif ( $inline =~ /replSetName:/ ) {
+				print FILEOUT "    replSetName: auction$suffix-config\n";
+			}
 			else {
 				print FILEOUT $inline;
 			}
 		}
 		close FILEIN;
 		close FILEOUT;
-		`$scpConnectString /tmp/mongoc3$suffix.conf root\@$scpHostString:/etc/mongoc3.conf`;
-
-		# If this is the last Mongodb service to be processed,
-		# then configure the mongos processes
-		if ( $appInstance->numShardsProcessed == $appInstance->numNosqlShards ) {
-			print $dblog "numShardsProcessed = numNosqlShards\n";
-			my $appServersRef = $self->appInstance->getActiveServicesByType('appServer');
-			my $numMongos     = 0;
-			my %hostsMongosConfigured;
-			foreach my $appServer (@$appServersRef) {
-				my $appHostname = $appServer->host->hostName;
-				my $appIpAddr   = $appServer->host->ipAddr;
-				if ( exists $hostsMongosConfigured{$appIpAddr} ) {
-
-					# If a mongos has already been configures on this host,
-					# Don't configure another one
-					next;
-				}
-
-				$hostsMongosConfigured{$appIpAddr} = 1;
-
-				# Copy config files to app servers
-
-				my $mongosPort =
-				  $self->internalPortMap->{'mongos'} +
-				  ( $self->getParamValue( $self->getParamValue('serviceType') . 'PortStep' ) * $numMongos );
-				$numMongos++;
-
-				# Save the mongos port for this hostname in the internalPortMap
-				$self->internalPortMap->{ 'mongos-' . $appIpAddr } = $mongosPort;
-
-				$scpConnectString = $appServer->host->scpConnectString;
-				$scpHostString    = $appServer->host->scpHostString;
-				open( FILEIN,  "$configDir/mongodb/mongos.conf" );
-				open( FILEOUT, ">/tmp/mongos$suffix.conf" );
-				while ( my $inline = <FILEIN> ) {
-					if ( $inline =~ /port:/ ) {
-						print FILEOUT "    port: " . $mongosPort . "\n";
-					}
-					else {
-						print FILEOUT $inline;
-					}
-				}
-				close FILEIN;
-				close FILEOUT;
-				`$scpConnectString /tmp/mongos$suffix.conf root\@$scpHostString:/etc/mongos.conf`;
-
-			}
-
-			# configure a mongos on the workload driver
-			my $dataManagerDriver   = $self->appInstance->dataManager;
-			my $dataManagerIpAddr   = $dataManagerDriver->host->ipAddr;
-			my $dataManagerHostname = $dataManagerDriver->host->hostName;
-			if ( !exists $hostsMongosConfigured{$dataManagerIpAddr} ) {
-				my $mongosPort =
-				  $self->internalPortMap->{'mongos'} +
-				  ( $self->getParamValue( $self->getParamValue('serviceType') . 'PortStep' ) * $numMongos );
-				$numMongos++;
-
-				# Save the mongos port for this hostname in the internalPortMap
-				$self->internalPortMap->{ 'mongos-' . $dataManagerIpAddr } = $mongosPort;
-				$scpConnectString                                          = $dataManagerDriver->host->scpConnectString;
-				$scpHostString                                             = $dataManagerDriver->host->scpHostString;
-				open( FILEIN,  "$configDir/mongodb/mongos.conf" );
-				open( FILEOUT, ">/tmp/mongos$suffix.conf" );
-				while ( my $inline = <FILEIN> ) {
-					if ( $inline =~ /port:/ ) {
-						print FILEOUT "    port: " . $mongosPort . "\n";
-					}
-					else {
-						print FILEOUT $inline;
-					}
-				}
-				close FILEIN;
-				close FILEOUT;
-				`$scpConnectString /tmp/mongos$suffix.conf root\@$scpHostString:/etc/mongos.conf`;
-
-			}
-
-			$appInstance->clear_numShardsProcessed;
-			$appInstance->clear_configDbString;
-		}
 	}
 
-	close $dblog;
+	# Configure all of the hosts running a mongod	
+	my $nosqlServersRef = $self->appInstance->getActiveServicesByType('nosqlServer');
+	foreach my $nosqlServer (@$nosqlServersRef) {
+		my $sshConnectString = $nosqlServer->host->sshConnectString;
+		my $scpConnectString = $nosqlServer->host->scpConnectString;
+		my $scpHostString    = $nosqlServer->host->scpHostString;
+		
+		my $dir = $self->getParamValue('mongodbDataDir');
+		`$sshConnectString mkdir -p $dir`;
+		$dir = $self->getParamValue('mongodbC1DataDir');
+		`$sshConnectString mkdir -p $dir`;
+		$dir = $self->getParamValue('mongodbC2DataDir');
+		`$sshConnectString mkdir -p $dir`;
+		$dir = $self->getParamValue('mongodbC3DataDir');
+		`$sshConnectString mkdir -p $dir`;
+		
+		if ( $nosqlServer->getParamValue('mongodbUseTHP') ) {
+			my $cmdOut = `$sshConnectString \"echo always > /sys/kernel/mm/transparent_hugepage/enabled\"`;
+			$cmdOut = `$sshConnectString \"echo always > /sys/kernel/mm/transparent_hugepage/defrag\"`;
+		}
+		else {
+
+			# Turn off transparent huge pages
+			my $cmdOut = `$sshConnectString \"echo never > /sys/kernel/mm/transparent_hugepage/enabled\"`;
+			$cmdOut = `$sshConnectString \"echo never > /sys/kernel/mm/transparent_hugepage/defrag\"`;
+		}
+		
+		if ( ( $numShards > 0 ) && ( $numReplicas > 0 ) ) {
+			open( FILEIN, "$configDir/mongodb/mongod-shardReplica.conf" )
+			  or die "Error opening $configDir/mongodb/mongod-shardReplica.conf:$!";
+			open( FILEOUT, ">/tmp/mongod$suffix.conf" ) or die "Error opening /tmp/mongod$suffix.conf:$!";
+			while ( my $inline = <FILEIN> ) {
+				if ( $inline =~ /port:/ ) {
+					print FILEOUT "    port: " . $nosqlServer->internalPortMap->{'mongod'} . "\n";
+				}
+				elsif ( $inline =~ /dbPath:/ ) {
+					print FILEOUT "    dbPath: \"" . $nosqlServer->getParamValue('mongodbDataDir') . "\"\n";
+				}
+				else {
+					print FILEOUT $inline;
+				}
+			}
+			close FILEIN;
+			close FILEOUT;
+			`$scpConnectString /tmp/mongod$suffix.conf root\@$scpHostString:/etc/mongod.conf`;
+		}
+
+		if ( ( $numShards > 0 ) && ( $numReplicas == 0 ) ) {
+			open( FILEIN, "$configDir/mongodb/mongod-sharded.conf" )
+			  or die "Error opening $configDir/mongodb/mongod-sharded.conf:$!";
+			open( FILEOUT, ">/tmp/mongod$suffix.conf" ) or die "Error opening /tmp/mongod$suffix.conf:$!";
+			while ( my $inline = <FILEIN> ) {
+				if ( $inline =~ /port:/ ) {
+					print FILEOUT "    port: " . $nosqlServer->internalPortMap->{'mongod'} . "\n";
+				}
+				elsif ( $inline =~ /dbPath:/ ) {
+					print FILEOUT "    dbPath: \"" . $nosqlServer->getParamValue('mongodbDataDir') . "\"\n";
+				}
+				else {
+					print FILEOUT $inline;
+				}
+			}
+			close FILEIN;
+			close FILEOUT;
+			`$scpConnectString /tmp/mongod$suffix.conf root\@$scpHostString:/etc/mongod.conf`;
+			`$scpConnectString /tmp/mongoc1$suffix.conf root\@$scpHostString:/etc/mongoc1.conf`;
+			`$scpConnectString /tmp/mongoc2$suffix.conf root\@$scpHostString:/etc/mongoc2.conf`;
+			`$scpConnectString /tmp/mongoc3$suffix.conf root\@$scpHostString:/etc/mongoc3.conf`;
+		}
+
+		if ( ( $numShards == 0 ) && ( $numReplicas > 0 ) ) {
+			open( FILEIN, "$configDir/mongodb/mongod-replica.conf" )
+			  or die "Error opening $configDir/mongodb/mongod-replica.conf:$!";
+			open( FILEOUT, ">/tmp/mongod$suffix.conf" ) or die "Error opening /tmp/mongod$suffix.conf:$!";
+			while ( my $inline = <FILEIN> ) {
+				if ( $inline =~ /port:/ ) {
+					print FILEOUT "    port: " . $nosqlServer->internalPortMap->{'mongod'} . "\n";
+				}
+				elsif ( $inline =~ /dbPath:/ ) {
+					print FILEOUT "    dbPath: \"" . $nosqlServer->getParamValue('mongodbDataDir') . "\"\n";
+				}
+				elsif ( $inline =~ /replSetName:/ ) {
+					print FILEOUT "    replSetName: auction$suffix\n";
+				}
+				else {
+					print FILEOUT $inline;
+				}
+			}
+			close FILEIN;
+			close FILEOUT;
+			`$scpConnectString /tmp/mongod$suffix.conf root\@$scpHostString:/etc/mongod.conf`;
+		}
+
+		if ( ( $numShards == 0 ) && ( $numReplicas == 0 ) ) {
+			open( FILEIN, "$configDir/mongodb/mongod-unsharded.conf" )
+			  or die "Error opening $configDir/mongodb/mongod-unsharded.conf:$!";
+			open( FILEOUT, ">/tmp/mongod$suffix.conf" ) or die "Error opening /tmp/mongod$suffix.conf:$!";
+			while ( my $inline = <FILEIN> ) {
+				if ( $inline =~ /port:/ ) {
+					print FILEOUT "    port: " . $nosqlServer->internalPortMap->{'mongod'} . "\n";
+				}
+				elsif ( $inline =~ /dbPath:/ ) {
+					print FILEOUT "    dbPath: \"" . $nosqlServer->getParamValue('mongodbDataDir') . "\"\n";
+				}
+				else {
+					print FILEOUT $inline;
+				}
+			}
+			close FILEIN;
+			close FILEOUT;
+			`$scpConnectString /tmp/mongod$suffix.conf root\@$scpHostString:/etc/mongod.conf`;
+		}
+		
+	}
+
+	if (( $numShards > 0 ) && ($numReplicas == 0)) {
+
+		# configure the mongos processes
+		my $appServersRef = $appInstance->getActiveServicesByType('appServer');
+		my $numMongos     = 0;
+		my %hostsMongosConfigured;
+		foreach my $appServer (@$appServersRef) {
+			my $appHostname = $appServer->host->hostName;
+			my $appIpAddr   = $appServer->host->ipAddr;
+			if ( exists $hostsMongosConfigured{$appIpAddr} ) {
+				# If a mongos has already been configures on this host,
+				# Don't configure another one
+				next;
+			}
+
+			$hostsMongosConfigured{$appIpAddr} = 1;
+
+			# Copy config files to app servers
+			my $mongosPort =
+			  $self->internalPortMap->{'mongos'} +
+			  ( $self->getParamValue( $self->getParamValue('serviceType') . 'PortStep' ) * $numMongos );
+			$numMongos++;
+
+			# Save the mongos port for this hostname in the internalPortMap
+			$self->internalPortMap->{ 'mongos-' . $appIpAddr } = $mongosPort;
+
+			$scpConnectString = $appServer->host->scpConnectString;
+			$scpHostString    = $appServer->host->scpHostString;
+			open( FILEIN,  "$configDir/mongodb/mongos.conf" );
+			open( FILEOUT, ">/tmp/mongos$suffix.conf" );
+			while ( my $inline = <FILEIN> ) {
+				if ( $inline =~ /port:/ ) {
+					print FILEOUT "    port: " . $mongosPort . "\n";
+				}
+				else {
+					print FILEOUT $inline;
+				}
+			}
+			close FILEIN;
+			close FILEOUT;
+			`$scpConnectString /tmp/mongos$suffix.conf root\@$scpHostString:/etc/mongos.conf`;
+
+		}
+
+	}
+
+}
+
+sub configureSharding {
+	my ($self, $mongosHostname, $mongosPort, $applog)            = @_;
+	my $console_logger   = get_logger("Console");
+
+	print $applog "Sharding MongoDB using mongos host $mongosHostname and port $mongosPort\n";
+	$logger->debug("configureShardingAfterStart Sharding MongoDB using mongos host $mongosHostname and port $mongosPor");	
+	
+	my $cmdString;
+	my $cmdout;
+
+	# Add the shards to the database
+	foreach my $nosqlServer (@$nosqlServersRef) {
+		my $hostname = $nosqlServer->getIpAddr();
+		my $port     = $nosqlServer->portMap->{'mongod'};
+		print $applog "Add $hostname as shard.\n";
+		$cmdString = "mongo --host $mongosHostname --port $mongosPort --eval 'printjson(sh.addShard(\\\"$hostname:$port\\\"))'";
+		my $cmdout = `$sshConnectString \"$cmdString\"`;
+		print $applog "$sshConnectString \"$cmdString\"\n";
+		print $applog $cmdout;
+	}
+
+	# enable sharding for the databases
+	print $applog "Enabling sharding for auction database.\n";
+	$cmdString = "mongo --host $mongosHostname --port $mongosPort --eval 'printjson(sh.enableSharding(\\\"auction\\\"))'";
+	my $cmdout = `$sshConnectString \"$cmdString\"`;
+	print $applog "$sshConnectString \"$cmdString\"\n";
+	print $applog $cmdout;
+	print $applog "Enabling sharding for bid database.\n";
+	$cmdString = "mongo --host $mongosHostname --port $mongosPort --eval 'printjson(sh.enableSharding(\\\"bid\\\"))'";
+	$cmdout    = `$sshConnectString \"$cmdString\"`;
+	print $applog "$sshConnectString \"$cmdString\"\n";
+	print $applog $cmdout;
+	print $applog "Enabling sharding for attendanceRecord database.\n";
+	$cmdString = "mongo --host $mongosHostname --port $mongosPort --eval 'printjson(sh.enableSharding(\\\"attendanceRecord\\\"))'";
+	$cmdout    = `$sshConnectString \"$cmdString\"`;
+	print $applog "$sshConnectString \"$cmdString\"\n";
+	print $applog $cmdout;
+	print $applog "Enabling sharding for imageInfo database.\n";
+	$cmdString = "mongo --host $mongosHostname --port $mongosPort --eval 'printjson(sh.enableSharding(\\\"imageInfo\\\"))'";
+	$cmdout    = `$sshConnectString \"$cmdString\"`;
+	print $applog "$sshConnectString \"$cmdString\"\n";
+	print $applog $cmdout;
+	print $applog "Enabling sharding for auctionFullImages database.\n";
+	$cmdString = "mongo --host $mongosHostname --port $mongosPort --eval 'printjson(sh.enableSharding(\\\"auctionFullImages\\\"))'";
+	$cmdout    = `$sshConnectString \"$cmdString\"`;
+	print $applog "$sshConnectString \"$cmdString\"\n";
+	print $applog $cmdout;
+	print $applog "Enabling sharding for auctionPreviewImages database.\n";
+	$cmdString = "mongo --host $mongosHostname --port $mongosPort --eval 'printjson(sh.enableSharding(\\\"auctionPreviewImages\\\"))'";
+	$cmdout    = `$sshConnectString \"$cmdString\"`;
+	print $applog "$sshConnectString \"$cmdString\"\n";
+	print $applog $cmdout;
+	print $applog "Enabling sharding for auctionThumbnailImages database.\n";
+	$cmdString = "mongo --host $mongosHostname --port $mongosPort --eval 'printjson(sh.enableSharding(\\\"auctionThumbnailImages\\\"))'";
+	$cmdout    = `$sshConnectString \"$cmdString\"`;
+	print $applog "$sshConnectString \"$cmdString\"\n";
+	print $applog $cmdout;
+
+	# Create indexes for collections
+	print $applog "Adding hashed index for userId in attendanceRecord Collection.\n";
+	$cmdString =
+"mongo --host $mongosHostname --port $mongosPort attendanceRecord --eval 'printjson(db.attendanceRecord.ensureIndex({userId : \\\"hashed\\\"}))'";
+	$cmdout = `$sshConnectString \"$cmdString\"`;
+	print $applog "$sshConnectString \"$cmdString\"\n";
+	print $applog $cmdout;
+	print $applog "Adding hashed index for bidderId in bid Collection.\n";
+	$cmdString = "mongo --host $mongosHostname --port $mongosPort bid --eval 'printjson(db.bid.ensureIndex({bidderId : \\\"hashed\\\"}))'";
+	$cmdout    = `$sshConnectString \"$cmdString\"`;
+	print $applog "$sshConnectString \"$cmdString\"\n";
+	print $applog $cmdout;
+	print $applog "Adding hashed index for entityid in imageInfo Collection.\n";
+	$cmdString =
+	  "mongo --host $mongosHostname --port $mongosPort imageInfo --eval 'printjson(db.imageInfo.ensureIndex({entityid : \\\"hashed\\\"}))'";
+	$cmdout = `$sshConnectString \"$cmdString\"`;
+	print $applog "$sshConnectString \"$cmdString\"\n";
+	print $applog $cmdout;
+	print $applog "Adding hashed index for imageid in imageFull Collection.\n";
+	$cmdString =
+"mongo --host $mongosHostname --port $mongosPort auctionFullImages --eval 'printjson(db.imageFull.ensureIndex({imageid : \\\"hashed\\\"}))'";
+	$cmdout = `$sshConnectString \"$cmdString\"`;
+	print $applog "$sshConnectString \"$cmdString\"\n";
+	print $applog $cmdout;
+	print $applog "Adding hashed index for imageid in imagePreview Collection.\n";
+	$cmdString =
+"mongo --host $mongosHostname --port $mongosPort auctionPreviewImages --eval 'printjson(db.imagePreview.ensureIndex({imageid : \\\"hashed\\\"}))'";
+	$cmdout = `$sshConnectString \"$cmdString\"`;
+	print $applog "$sshConnectString \"$cmdString\"\n";
+	print $applog $cmdout;
+	print $applog "Adding hashed index for imageid in imageThumbnail Collection.\n";
+	$cmdString =
+"mongo --host $mongosHostname --port $mongosPort auctionThumbnailImages --eval 'printjson(db.imageThumbnail.ensureIndex({imageid : \\\"hashed\\\"}))'";
+	$cmdout = `$sshConnectString \"$cmdString\"`;
+	print $applog "$sshConnectString \"$cmdString\"\n";
+	print $applog $cmdout;
+
+	# shard the collections
+	print $applog "Sharding attendanceRecord collection on hashed userId.\n";
+	$cmdString =
+"mongo --host $mongosHostname --port $mongosPort --eval 'printjson(sh.shardCollection(\\\"attendanceRecord.attendanceRecord\\\", {\\\"userId\\\" : \\\"hashed\\\"}))'";
+	$cmdout = `$sshConnectString \"$cmdString\"`;
+	print $applog "$sshConnectString \"$cmdString\"\n";
+	print $applog $cmdout;
+	print $applog "Sharding bid collection on hashed bidderId.\n";
+	$cmdString =
+"mongo --host $mongosHostname --port $mongosPort --eval 'printjson(sh.shardCollection(\\\"bid.bid\\\",{\\\"bidderId\\\" : \\\"hashed\\\"}))'";
+	$cmdout = `$sshConnectString \"$cmdString\"`;
+	print $applog "$sshConnectString \"$cmdString\"\n";
+	print $applog $cmdout;
+	print $applog "Sharding imageInfo collection on hashed entityid.\n";
+	$cmdString =
+"mongo --host $mongosHostname --port $mongosPort --eval 'printjson(sh.shardCollection(\\\"imageInfo.imageInfo\\\",{\\\"entityid\\\" : \\\"hashed\\\"}))'";
+	$cmdout = `$sshConnectString \"$cmdString\"`;
+	print $applog "$sshConnectString \"$cmdString\"\n";
+	print $applog $cmdout;
+	print $applog "Sharding imageFull collection on hashed imageid.\n";
+	$cmdString =
+"mongo --host $mongosHostname --port $mongosPort --eval 'printjson(sh.shardCollection(\\\"auctionFullImages.imageFull\\\",{\\\"imageid\\\" : \\\"hashed\\\"}))'";
+	$cmdout = `$sshConnectString \"$cmdString\"`;
+	print $applog "$sshConnectString \"$cmdString\"\n";
+	print $applog $cmdout;
+	print $applog "Sharding imagePreview collection on hashed imageid.\n";
+	$cmdString =
+"mongo --host $mongosHostname --port $mongosPort --eval 'printjson(sh.shardCollection(\\\"auctionPreviewImages.imagePreview\\\",{\\\"imageid\\\" : \\\"hashed\\\"}))'";
+	$cmdout = `$sshConnectString \"$cmdString\"`;
+	print $applog "$sshConnectString \"$cmdString\"\n";
+	print $applog $cmdout;
+	print $applog "Sharding imageThumbnail collection on hashed imageid.\n";
+	$cmdString =
+"mongo --host $mongosHostname --port $mongosPort --eval 'printjson(sh.shardCollection(\\\"auctionThumbnailImages.imageThumbnail\\\",{\\\"imageid\\\" : \\\"hashed\\\"}))'";
+	$cmdout = `$sshConnectString \"$cmdString\"`;
+	print $applog "$sshConnectString \"$cmdString\"\n";
+	print $applog $cmdout;
+
+	# disable the balancer
+	print $applog "Disabling the balancer.\n";
+	$cmdString = "mongo --host $mongosHostname --port $mongosPort --eval 'printjson(sh.setBalancerState(false))'";
+	$cmdout    = `$sshConnectString \"$cmdString\"`;
+	print $applog "$sshConnectString \"$cmdString\"\n";
+	print $applog $cmdout;
+
+}
+
+sub configureReplicasAfterStart {
+	my ($self, $applog)            = @_;
+	my $console_logger   = get_logger("Console");
 
 }
 
 sub configureAfterStart {
-	my ($self, $logPath)            = @_;
+	my ($self, $applog)            = @_;
+	my $console_logger   = get_logger("Console");
+	my $name     = $self->getParamValue('dockerName');
+	my $host = $self->host;
+	my $hostname = $self->host->hostName;
 
-	if ($self->configuredAfterStart) {
-		return;
-	}
-	$self->configuredAfterStart(1);
+	my $logName = "$logPath/ConfigureAfterStartMongodb-$hostname-$name.log";
+	my $applog;
+	open( $applog, ">$logName" )
+	  || die "Error opening /$logName:$!";
+
+	my $appInstance = $self->appInstance;
 
 	my $nosqlServersRef = $appInstance->getActiveServicesByType('nosqlServer');
 	my $cmdout;
@@ -1105,141 +1012,6 @@ sub configureAfterStart {
 		return 0;
 	}
 	elsif ( $appInstance->numNosqlShards > 0 ) {
-		print $applog "Sharding MongoDB\n";
-		my $localPort = $self->portMap->{'mongos'};
-		my $cmdString;
-
-		# Add the shards to the database
-		foreach my $nosqlServer (@$nosqlServersRef) {
-			my $hostname = $nosqlServer->getIpAddr();
-			my $port     = $nosqlServer->portMap->{'mongod'};
-			print $applog "Add $hostname as shard.\n";
-			$cmdString = "mongo --port $localPort --eval 'printjson(sh.addShard(\\\"$hostname:$port\\\"))'";
-			my $cmdout = `$sshConnectString \"$cmdString\"`;
-			print $applog "$sshConnectString \"$cmdString\"\n";
-			print $applog $cmdout;
-		}
-
-		# enable sharding for the databases
-
-		print $applog "Enabling sharding for auction database.\n";
-		$cmdString = "mongo --port $localPort --eval 'printjson(sh.enableSharding(\\\"auction\\\"))'";
-		my $cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Enabling sharding for bid database.\n";
-		$cmdString = "mongo --port $localPort --eval 'printjson(sh.enableSharding(\\\"bid\\\"))'";
-		$cmdout    = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Enabling sharding for attendanceRecord database.\n";
-		$cmdString = "mongo --port $localPort --eval 'printjson(sh.enableSharding(\\\"attendanceRecord\\\"))'";
-		$cmdout    = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Enabling sharding for imageInfo database.\n";
-		$cmdString = "mongo --port $localPort --eval 'printjson(sh.enableSharding(\\\"imageInfo\\\"))'";
-		$cmdout    = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Enabling sharding for auctionFullImages database.\n";
-		$cmdString = "mongo --port $localPort --eval 'printjson(sh.enableSharding(\\\"auctionFullImages\\\"))'";
-		$cmdout    = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Enabling sharding for auctionPreviewImages database.\n";
-		$cmdString = "mongo --port $localPort --eval 'printjson(sh.enableSharding(\\\"auctionPreviewImages\\\"))'";
-		$cmdout    = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Enabling sharding for auctionThumbnailImages database.\n";
-		$cmdString = "mongo --port $localPort --eval 'printjson(sh.enableSharding(\\\"auctionThumbnailImages\\\"))'";
-		$cmdout    = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-
-		# Create indexes for collections
-		print $applog "Adding hashed index for userId in attendanceRecord Collection.\n";
-		$cmdString =
-"mongo --port $localPort attendanceRecord --eval 'printjson(db.attendanceRecord.ensureIndex({userId : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Adding hashed index for bidderId in bid Collection.\n";
-		$cmdString = "mongo --port $localPort bid --eval 'printjson(db.bid.ensureIndex({bidderId : \\\"hashed\\\"}))'";
-		$cmdout    = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Adding hashed index for entityid in imageInfo Collection.\n";
-		$cmdString =
-		  "mongo --port $localPort imageInfo --eval 'printjson(db.imageInfo.ensureIndex({entityid : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Adding hashed index for imageid in imageFull Collection.\n";
-		$cmdString =
-"mongo --port $localPort auctionFullImages --eval 'printjson(db.imageFull.ensureIndex({imageid : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Adding hashed index for imageid in imagePreview Collection.\n";
-		$cmdString =
-"mongo --port $localPort auctionPreviewImages --eval 'printjson(db.imagePreview.ensureIndex({imageid : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Adding hashed index for imageid in imageThumbnail Collection.\n";
-		$cmdString =
-"mongo --port $localPort auctionThumbnailImages --eval 'printjson(db.imageThumbnail.ensureIndex({imageid : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-
-		# shard the collections
-		print $applog "Sharding attendanceRecord collection on hashed userId.\n";
-		$cmdString =
-"mongo --port $localPort --eval 'printjson(sh.shardCollection(\\\"attendanceRecord.attendanceRecord\\\", {\\\"userId\\\" : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Sharding bid collection on hashed bidderId.\n";
-		$cmdString =
-"mongo --port $localPort --eval 'printjson(sh.shardCollection(\\\"bid.bid\\\",{\\\"bidderId\\\" : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Sharding imageInfo collection on hashed entityid.\n";
-		$cmdString =
-"mongo --port $localPort --eval 'printjson(sh.shardCollection(\\\"imageInfo.imageInfo\\\",{\\\"entityid\\\" : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Sharding imageFull collection on hashed imageid.\n";
-		$cmdString =
-"mongo --port $localPort --eval 'printjson(sh.shardCollection(\\\"auctionFullImages.imageFull\\\",{\\\"imageid\\\" : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Sharding imagePreview collection on hashed imageid.\n";
-		$cmdString =
-"mongo --port $localPort --eval 'printjson(sh.shardCollection(\\\"auctionPreviewImages.imagePreview\\\",{\\\"imageid\\\" : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-		print $applog "Sharding imageThumbnail collection on hashed imageid.\n";
-		$cmdString =
-"mongo --port $localPort --eval 'printjson(sh.shardCollection(\\\"auctionThumbnailImages.imageThumbnail\\\",{\\\"imageid\\\" : \\\"hashed\\\"}))'";
-		$cmdout = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-
-		# disable the balancer
-		print $applog "Disabling the balancer.\n";
-		$cmdString = "mongo --port $localPort --eval 'printjson(sh.setBalancerState(false))'";
-		$cmdout    = `$sshConnectString \"$cmdString\"`;
-		print $applog "$sshConnectString \"$cmdString\"\n";
-		print $applog $cmdout;
-
 	}
 	elsif ( $appInstance->numNosqlReplicas > 0 ) {
 		$logger->debug("Creating the MongoDB Replica Set");
@@ -1306,7 +1078,185 @@ sub configureAfterStart {
 
 	}
 
+	close $appLog;
 }
+
+sub clearDataAfterStart {
+}
+
+sub clearDataBeforeStart {
+	my ( $self, $logPath ) = @_;
+	my $hostname         = $self->host->hostName;
+	my $logName          = "$logPath/MongoDB-clearData-$hostname.log";
+	my $mongodbDataDir   = $self->getParamValue('mongodbDataDir');
+	my $mongodbC1DataDir = $self->getParamValue('mongodbC1DataDir');
+	my $mongodbC2DataDir = $self->getParamValue('mongodbC2DataDir');
+	my $mongodbC3DataDir = $self->getParamValue('mongodbC3DataDir');
+
+	my $applog;
+	open( $applog, ">$logName" ) or die "Error opening $logName:$!";
+
+	my $sshConnectString = $self->host->sshConnectString;
+	print $applog "Clearing old MongoDB data on " . $hostname . "\n";
+
+	my $cmdout = `$sshConnectString \"find $mongodbDataDir/* -delete 2>&1\"`;
+	print $applog $cmdout;
+	$cmdout = `$sshConnectString \"ls -l $mongodbDataDir 2>&1\"`;
+	print $applog "After clearing, MongoDB data dir has: $cmdout";
+
+	$cmdout = `$sshConnectString \"find $mongodbC1DataDir/* -delete 2>&1\"`;
+	print $applog $cmdout;
+	$cmdout = `$sshConnectString \"ls -l $mongodbC1DataDir 2>&1\"`;
+	print $applog "After clearing, $mongodbC1DataDir has: $cmdout";
+
+	$cmdout = `$sshConnectString \"find $mongodbC2DataDir/* -delete 2>&1\"`;
+	print $applog $cmdout;
+	$cmdout = `$sshConnectString \"ls -l $mongodbC2DataDir 2>&1\"`;
+	print $applog "After clearing, $mongodbC2DataDir has: $cmdout";
+
+	$cmdout = `$sshConnectString \"find $mongodbC3DataDir/* -delete 2>&1\"`;
+	print $applog $cmdout;
+	$cmdout = `$sshConnectString \"ls -l $mongodbC3DataDir 2>&1\"`;
+	print $applog "After clearing, $mongodbC3DataDir has: $cmdout";
+
+	close $applog;
+
+}
+
+sub waitForMongodbReplicaSync {
+	my ( $self, $nosqlHostname, $port, $runLog) = @_;
+	my $console_logger = get_logger("Console");
+	my $logger         = get_logger("Weathervane::DataManager::AuctionDataManager");
+
+	my $workloadNum    = $self->getParamValue('workloadNum');
+	my $appInstanceNum = $self->getParamValue('appInstanceNum');
+	$logger->debug( "waitFormongodbReplicaSync for workload $workloadNum, appInstance $appInstanceNum" );
+
+	my $inSync           = 0;
+	while ( !$inSync ) {
+		sleep 30;
+
+		my $time1 = -1;
+		my $time2 = -1;
+		$inSync = 1;
+		print $runLog "Checking MongoDB Replica Sync.  rs.status: \n";
+		my $cmdString = "mongo --host $nosqlHostname --port $port --eval 'printjson(rs.status())'";
+		my $cmdout = `$cmdString`;
+		print $runLog $cmdout;
+
+		my @lines = split /\n/, $cmdout;
+
+		# Parse rs.status to see if timestamp is same on primary and secondaries
+		foreach my $line (@lines) {
+			if ( $line =~ /\"optime\"\s*:\s*Timestamp\((\d+)\,\s*(\d+)/ ) {
+				if ( $time1 == -1 ) {
+					$time1 = $1;
+					$time2 = $2;
+				}
+				elsif ( ( $time1 != $1 ) || ( $time2 != $2 ) ) {
+					print $runLog "Not yet in sync\n";
+					$inSync = 0;
+					last;
+				}
+			}
+		}
+	}
+}
+
+sub isUp {
+	my ( $self, $fileout ) = @_;
+
+	if ( !$self->isRunning($fileout) ) {
+		return 0;
+	}
+
+	return 1;
+
+}
+
+sub isRunning {
+	my ( $self, $fileout ) = @_;
+
+	my $sshConnectString = $self->host->sshConnectString;
+
+	my $cmdOut = `$sshConnectString \"ps x | grep mongo | grep -v grep\"`;
+	print $fileout $cmdOut;
+	if ( $cmdOut =~ /mongod\.conf/ ) {
+		return 1;
+	}
+	else {
+		return 0;
+	}
+}
+
+sub setPortNumbers {
+	my ($self)          = @_;
+	my $appInstance     = $self->appInstance;
+	my $numNosqlServers = $appInstance->getNumActiveOfServiceType('nosqlServer');
+	my $numShards       = $appInstance->numNosqlShards;
+	my $numReplicas     = $appInstance->numNosqlReplicas;
+	my $serviceType     = $self->getParamValue('serviceType');
+	my $portMultiplier = $self->appInstance->getNextPortMultiplierByServiceType($serviceType);
+	my $portOffset     = $self->getParamValue( $serviceType . 'PortStep' ) * $portMultiplier;
+
+	my $instanceNumber = $self->getParamValue('instanceNum');
+	$self->internalPortMap->{'mongod'}  = 27017 + $portOffset;
+	$self->internalPortMap->{'mongos'}  = 27017;
+	$self->internalPortMap->{'mongoc1'} = 27019;
+	$self->internalPortMap->{'mongoc2'} = 27020;
+	$self->internalPortMap->{'mongoc3'} = 27021;
+	if ( ( $numShards > 0 ) && ( $numReplicas > 0 ) ) {
+		$self->shardNum( ceil( $instanceNumber / ( 1.0 * $appInstance->numNosqlReplicas ) ) );
+		$self->replicaNum( ( $instanceNumber % $appInstance->numNosqlReplicas ) + 1 );
+		$self->internalPortMap->{'mongod'} = 27018 + $portOffset;
+	}
+	elsif ( $numShards > 0 ) {
+		$self->shardNum($instanceNumber);
+		$self->internalPortMap->{'mongod'} = 27018 + $portOffset;
+	}
+	elsif ( $numReplicas > 0 ) {
+		$self->replicaNum($instanceNumber);
+	}
+	elsif ( $numNosqlServers > 1 ) {
+		die "When not using sharding or replicas, the number of NoSQL servers must equal 1.";
+	}
+}
+
+sub setExternalPortNumbers {
+	my ($self)          = @_;
+	$self->portMap->{'mongod'}  = $self->internalPortMap->{'mongod'};
+	$self->portMap->{'mongoc1'} = $self->internalPortMap->{'mongoc1'};
+	$self->portMap->{'mongoc2'} = $self->internalPortMap->{'mongoc2'};
+	$self->portMap->{'mongoc3'} = $self->internalPortMap->{'mongoc3'};
+}
+
+override 'sanityCheck' => sub {
+	my ($self, $cleanupLogDir) = @_;
+	my $console_logger = get_logger("Console");
+	my $sshConnectString = $self->host->sshConnectString;
+	my $hostname         = $self->host->hostName;
+	my $logName          = "$cleanupLogDir/SanityCheckMongoDB-$hostname.log";
+	my $dir = $self->getParamValue('mongodbDataDir');
+
+	my $dblog;
+	open( $dblog, ">$logName" )
+	  || die "Error opening /$logName:$!";
+
+	my $cmdString = "$sshConnectString df -h $dir";
+	my $cmdout = `$cmdString`;
+	print $dblog "$cmdString\n";
+	print $dblog "$cmdout\n";
+
+	close $dblog;
+
+	if ($cmdout =~ /100\%/) {
+		$console_logger->error("Failed Sanity Check: MongoDB Data Directory $dir is full on $hostname.");
+		return 0;
+	} else {
+		return 1;
+	}
+	
+};
 
 sub stopStatsCollection {
 	my ($self) = @_;
