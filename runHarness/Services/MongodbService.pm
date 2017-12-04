@@ -360,6 +360,7 @@ override 'start' => sub {
 	my $logger = get_logger("Weathervane::Services::MongodbService");
 	my $console_logger   = get_logger("Console");
 	my $logName     = "$logPath/StartMongodb.log";
+	my $appInstance = $self->appInstance;
 	
 	$logger->debug("MongoDB Start");
 	
@@ -372,7 +373,7 @@ override 'start' => sub {
 	my $replicasPerShard = $self->getParamValue('nosqlReplicasPerShard');
 	my $sharded          = $self->getParamValue('nosqlSharded');
 	my $replicated       = $self->getParamValue('nosqlReplicated');
-	my $numNosqlServers = $self->appInstance->getNumActiveOfServiceType('nosqlServer');
+	my $numNosqlServers = $appInstance->getNumActiveOfServiceType('nosqlServer');
 
 	# Determine the number of shards and replicas-per-shard
 	my $numNosqlShards = 0;
@@ -445,7 +446,7 @@ override 'start' => sub {
 
 	$self->host->startNscd();
 
-}
+};
 
 sub startMongodServers {
 	my ( $self, $isReplicated, $dblog ) = @_;
@@ -457,7 +458,8 @@ sub startMongodServers {
 	#  start all of the mongod servers
 	my $nosqlServersRef = $self->appInstance->getActiveServicesByType('nosqlServer');
 	foreach my $nosqlServer (@$nosqlServersRef) {	
-
+		my $hostname = $nosqlServer->host->hostName;
+		
 		$nosqlServer->portMap->{'mongod'}  = $nosqlServer->internalPortMap->{'mongod'};
 		$nosqlServer->portMap->{'mongoc1'} = $nosqlServer->internalPortMap->{'mongoc1'};
 		$nosqlServer->portMap->{'mongoc2'} = $nosqlServer->internalPortMap->{'mongoc2'};
@@ -474,7 +476,7 @@ sub startMongodServers {
 			my $replicaName      = "auction" . $self->shardNum;
 			$cmdString .= " --replSet=$replicaName ";
 		}
-		$cmdOut = `$sshConnectString mongod -f /etc/mongod.conf 2>&1`;
+		my $cmdOut = `$sshConnectString mongod -f /etc/mongod.conf 2>&1`;
 		print $dblog "$sshConnectString mongod -f /etc/mongod.conf 2>&1\n";
 		print $dblog $cmdOut;
 		if ( !( $cmdOut =~ /success/ ) ) {
