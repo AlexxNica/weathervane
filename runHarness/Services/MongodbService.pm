@@ -995,6 +995,7 @@ sub configureReplicasAfterStart {
 sub configureAfterStart {
 	my ($self, $applog)            = @_;
 	my $console_logger   = get_logger("Console");
+	my $logger = get_logger("Weathervane::Services::MongodbService");
 	my $name     = $self->getParamValue('dockerName');
 	my $host = $self->host;
 	my $hostname = $self->host->hostName;
