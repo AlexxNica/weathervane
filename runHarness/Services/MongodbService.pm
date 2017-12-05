@@ -737,7 +737,7 @@ sub configureSharding {
 	my $logger = get_logger("Weathervane::Services::MongodbService");
 
 	print $applog "Sharding MongoDB using mongos host $mongosHostname and port $mongosPort\n";
-	$logger->debug("configureShardingAfterStart Sharding MongoDB using mongos host $mongosHostname and port $mongosPort");	
+	$logger->debug("configureSharding Sharding MongoDB using mongos host $mongosHostname and port $mongosPort");	
 	
 	my $cmdString;
 	my $cmdout;
@@ -895,15 +895,15 @@ sub configureAfterStart {
 	my $cmdout;
 	my $replicaMasterHostname = "";
 	my $replicaMasterPort = "";
-	if (   ( $appInstance->numNosqlShards > 0 )
-		&& ( $appInstance->numNosqlReplicas > 0 ) )
+	if (   ( $self->numNosqlShards > 0 )
+		&& ( $self->numNosqlReplicas > 0 ) )
 	{
 		$console_logger->( "Loading data in sharded and replicated mongo is not supported yet" );
 		return 0;
 	}
-	elsif ( $appInstance->numNosqlShards > 0 ) {
+	elsif ( $self->numNosqlShards > 0 ) {
 	}
-	elsif ( $appInstance->numNosqlReplicas > 0 ) {
+	elsif ( $self->numNosqlReplicas > 0 ) {
 		$logger->debug("Creating the MongoDB Replica Set");
 		print $applog "Creating the MongoDB Replica Set\n";
 		my $cmdString;
@@ -1263,8 +1263,8 @@ sub getConfigSummary {
 	tie( my %csv, 'Tie::IxHash' );
 	my $appInstance = $self->appInstance;
 
-	$csv{"numNosqlShards"}   = $appInstance->numNosqlShards;
-	$csv{"numNosqlReplicas"} = $appInstance->numNosqlReplicas;
+	$csv{"numNosqlShards"}   = $self->numNosqlShards;
+	$csv{"numNosqlReplicas"} = $self->numNosqlReplicas;
 
 	return \%csv;
 }

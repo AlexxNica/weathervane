@@ -700,20 +700,18 @@ sub loadData {
 	}
 
 	my $mongodbReplicaSet = "";
-	if ( $nosqlService->numNosqlReplicas > 0 ) {
-		for ( my $i = 0 ; $i <= $#{$nosqlServersRef} ; $i++ ) {
-			my $nosqlService  = $nosqlServersRef->[$i];
-			my $nosqlHostname = $nosqlService->getIpAddr();
-			my $replicaPort;
-			if ($i == 0) {
-				$replicaPort = $nosqlService->internalPortMap->{'mongod'};
-				print $applog "Creating mongodbReplicaSet define.  $nosqlHostname is primary ($nosqlHostname), using port $replicaPort.\n";
-				$mongodbReplicaSet .= "$nosqlHostname:$replicaPort";
-			} else {
-				$replicaPort = $nosqlService->portMap->{'mongod'};
-				print $applog "Creating mongodbReplicaSet define.  $nosqlHostname is secondary, using port $replicaPort.\n";
-				$mongodbReplicaSet .= ",$nosqlHostname:$replicaPort";
-			}
+	for ( my $i = 0 ; $i <= $#{$nosqlServersRef} ; $i++ ) {
+		my $nosqlService  = $nosqlServersRef->[$i];
+		my $nosqlHostname = $nosqlService->getIpAddr();
+		my $replicaPort;
+		if ($i == 0) {
+			$replicaPort = $nosqlService->internalPortMap->{'mongod'};
+			print $applog "Creating mongodbReplicaSet define.  $nosqlHostname is primary ($nosqlHostname), using port $replicaPort.\n";
+			$mongodbReplicaSet .= "$nosqlHostname:$replicaPort";
+		} else {
+			$replicaPort = $nosqlService->portMap->{'mongod'};
+			print $applog "Creating mongodbReplicaSet define.  $nosqlHostname is secondary, using port $replicaPort.\n";
+			$mongodbReplicaSet .= ",$nosqlHostname:$replicaPort";
 		}
 	}
 
