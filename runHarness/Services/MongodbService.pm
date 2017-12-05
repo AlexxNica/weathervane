@@ -269,10 +269,12 @@ sub stopMongosServers {
 		# first make sure the mongos is running.  If so, stop it.
 		my $cmdOut = `$appSshConnectString \"ps x | grep mongo | grep -v grep\"`;
 		print $dblog "ps output on $appHostname: $cmdOut\n";
+		$logger->debug("ps output on $appHostname: $cmdOut");
 		my @lines = split /\n/, $cmdOut;
 		foreach my $line (@lines) {
 			if ( $line =~ /\s*(\d+)\s.*mongos\.conf/ ) {
 				my $pid = $1;
+	    		    $logger->debug("mongos router is running on $appHostname.  Stopping process $pid");
 				print $dblog "mongos router is running on $appHostname.  Stopping process $pid\n";
 				$cmdOut = `$appSshConnectString kill $pid`;
 			}
@@ -478,8 +480,10 @@ sub startMongosServers {
 		print $dblog $cmdOut;
 		if ( !( $cmdOut =~ /success/ ) ) {
 			print $dblog "Couldn't start mongos on $appHostname : $cmdOut\n";
+			$logger->debug("Couldn't start mongos on $appHostname : $cmdOut\n");
 			die "Couldn't start mongos on $appHostname : $cmdOut\n";
 		}
+		$logger->debug("Started mongos on app server host $appHostname, configdb = $configdbString");
 		
 		appServer->portMap->{'mongos'} = appServer->internalPortMap->{'mongos'};
 	}
