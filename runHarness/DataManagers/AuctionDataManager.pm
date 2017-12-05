@@ -185,6 +185,7 @@ sub prepareData {
 
 	my $dbServersRef    = $self->appInstance->getActiveServicesByType('dbServer');
 	my $nosqlServersRef = $self->appInstance->getActiveServicesByType('nosqlServer');
+	my $nosqlService = $nosqlServicesRef->[0];
 
 	# If the imageStore type is filesystem, then clean added images from the filesystem
 	if ( $self->getParamValue('imageStoreType') eq "filesystem" ) {
@@ -208,7 +209,7 @@ sub prepareData {
 	print $logHandle "Preparing auctions to be active in current run\n";
 	my $nosqlHostname;
 	my $mongodbPort;
-	if ( $self->appInstance->numNosqlShards == 0 ) {
+	if ( $nosqlService->numNosqlShards == 0 ) {
 		my $nosqlService = $nosqlServersRef->[0];
 		$nosqlHostname = $nosqlService->getIpAddr();
 		$mongodbPort   = $nosqlService->portMap->{'mongod'};
@@ -222,7 +223,7 @@ sub prepareData {
 	}
 
 	my $mongodbReplicaSet = "$nosqlHostname:$mongodbPort";
-	if ( $self->appInstance->numNosqlReplicas > 0 ) {
+	if ( $nosqlService->numNosqlReplicas > 0 ) {
 		for ( my $i = 1 ; $i <= $#{$nosqlServersRef} ; $i++ ) {
 			my $nosqlService = $nosqlServersRef->[$i];
 			$nosqlHostname = $nosqlService->getIpAddr();
@@ -243,8 +244,8 @@ sub prepareData {
 	}
 
 	my $dbPrepOptions = " -a $auctions ";
-	$dbPrepOptions .= " -m " . $self->appInstance->numNosqlShards . " ";
-	$dbPrepOptions .= " -p " . $self->appInstance->numNosqlReplicas . " ";
+	$dbPrepOptions .= " -m " . $nosqlService->numNosqlShards . " ";
+	$dbPrepOptions .= " -p " . $nosqlService->numNosqlReplicas . " ";
 
 	my $maxDuration = $self->getParamValue('maxDuration');
 	my $totalTime =
@@ -264,8 +265,8 @@ sub prepareData {
 		return 0;
 	}
 
-	if (   ( $self->appInstance->numNosqlReplicas > 0 )
-		&& ( $self->appInstance->numNosqlShards == 0 ) )
+	if (   ( $nosqlService->numNosqlReplicas > 0 )
+		&& ( $nosqlService->numNosqlShards == 0 ) )
 	{
 		$console_logger->info("Waiting for MongoDB Replicas to finish synchronizing.");
 		waitForMongodbReplicaSync( $self, $logHandle );
@@ -656,8 +657,8 @@ sub loadData {
 	my $dbLoaderOptions = "-d $dbScriptDir/items.json -t " . $self->getParamValue('dbLoaderThreads');
 	$dbLoaderOptions .= " -u $maxUsers ";
 
-	$dbLoaderOptions .= " -m " . $appInstance->numNosqlShards . " ";
-	$dbLoaderOptions .= " -p " . $appInstance->numNosqlReplicas . " ";
+	$dbLoaderOptions .= " -m " . $nosqlService->numNosqlShards . " ";
+	$dbLoaderOptions .= " -p " . $nosqlService->numNosqlReplicas . " ";
 
 	my $maxDuration = $self->getParamValue('maxDuration');
 	my $totalTime =
@@ -683,8 +684,9 @@ sub loadData {
 
 	my $nosqlHostname;
 	my $mongodbPort;
-	my $nosqlServersRef = $appInstance->getActiveServicesByType('nosqlServer');
-	if ( $appInstance->numNosqlShards == 0 ) {
+	my $nosqlServersRef = $self->appInstance->getActiveServicesByType('nosqlServer');
+	my $nosqlService = $nosqlServicesRef->[0];
+	if ( $nosqlService->numNosqlShards == 0 ) {
 		my $nosqlService = $nosqlServersRef->[0];
 		$nosqlHostname = $nosqlService->getIpAddr();
 		$mongodbPort   = $nosqlService->portMap->{'mongod'};
@@ -698,7 +700,7 @@ sub loadData {
 	}
 
 	my $mongodbReplicaSet = "";
-	if ( $appInstance->numNosqlReplicas > 0 ) {
+	if ( $nosqlService->numNosqlReplicas > 0 ) {
 		for ( my $i = 0 ; $i <= $#{$nosqlServersRef} ; $i++ ) {
 			my $nosqlService  = $nosqlServersRef->[$i];
 			my $nosqlHostname = $nosqlService->getIpAddr();
@@ -780,8 +782,8 @@ sub loadData {
 		close $driver;
 	}
 	
-	if (   ( $appInstance->numNosqlReplicas > 0 )
-		&& ( $appInstance->numNosqlShards == 0 ) )
+	if (   ( $nosqlService->numNosqlReplicas > 0 )
+		&& ( $nosqlService->numNosqlShards == 0 ) )
 	{
 		$console_logger->info("Waiting for MongoDB Replicas to finish synchronizing.");
 		waitForMongodbReplicaSync( $self, $applog );
@@ -917,6 +919,7 @@ sub cleanData {
 
 	my $dbServersRef    = $self->appInstance->getActiveServicesByType('dbServer');
 	my $nosqlServersRef = $self->appInstance->getActiveServicesByType('nosqlServer');
+	my $nosqlService = $nosqlServicesRef->[0];
 
 	# If the imageStore type is filesystem, then clean added images from the filesystem
 	if ( $self->getParamValue('imageStoreType') eq "filesystem" ) {
@@ -949,7 +952,7 @@ sub cleanData {
 	print $logHandle "Cleaning up data services for appInstance " . "$appInstanceNum of workload $workloadNum.\n";
 	my $nosqlHostname;
 	my $mongodbPort;
-	if ( $self->appInstance->numNosqlShards == 0 ) {
+	if ( $nosqlService->numNosqlShards == 0 ) {
 		my $nosqlService = $nosqlServersRef->[0];
 		$nosqlHostname = $nosqlService->getIpAddr();
 		$mongodbPort   = $nosqlService->portMap->{'mongod'};
@@ -964,7 +967,7 @@ sub cleanData {
 	}
 
 	my $mongodbReplicaSet = "$nosqlHostname:$mongodbPort";
-	if ( $self->appInstance->numNosqlReplicas > 0 ) {
+	if ( $nosqlService->numNosqlReplicas > 0 ) {
 		for ( my $i = 1 ; $i <= $#{$nosqlServersRef} ; $i++ ) {
 			my $nosqlService = $nosqlServersRef->[$i];
 			$nosqlHostname = $nosqlService->getIpAddr();
@@ -985,8 +988,8 @@ sub cleanData {
 	}
 
 	my $dbPrepOptions = " -a $auctions ";
-	$dbPrepOptions .= " -m " . $self->appInstance->numNosqlShards . " ";
-	$dbPrepOptions .= " -p " . $self->appInstance->numNosqlReplicas . " ";
+	$dbPrepOptions .= " -m " . $nosqlService->numNosqlShards . " ";
+	$dbPrepOptions .= " -p " . $nosqlService->numNosqlReplicas . " ";
 
 	my $maxDuration = $self->getParamValue('maxDuration');
 	my $steadyState = $self->getParamValue('steadyState');
@@ -1019,8 +1022,8 @@ sub cleanData {
 		return 0;
 	}
 
-	if (   ( $self->appInstance->numNosqlReplicas > 0 )
-		&& ( $self->appInstance->numNosqlShards == 0 ) )
+	if (   ( $nosqlService->numNosqlReplicas > 0 )
+		&& ( $nosqlService->numNosqlShards == 0 ) )
 	{
 		$console_logger->info("Waiting for MongoDB Replicas to finish synchronizing.");
 		waitForMongodbReplicaSync( $self, $logHandle );
