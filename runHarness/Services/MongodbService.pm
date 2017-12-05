@@ -425,12 +425,12 @@ sub startMongocServers {
 	print $dblog "Initialize configServer replica set.\n";
 	my $cmdString = "mongo --host $configSvrHostnames[0] --port $configSvrPorts[0] --eval 'printjson(rs.initiate(
 		{
-			_id: \\\"auction$suffix-config\\\",
+			_id: \"auction$suffix-config\",
 			configsvr: true,
 			members: [
-			  { _id : 0, host : \\\"$configSvrHostnames[0]:$configSvrPorts[0]\\\" },
-      		  { _id : 1, host : \\\"$configSvrHostnames[1]:$configSvrPorts[1]\\\" },
-      		  { _id : 2, host : \\\"$configSvrHostnames[2]:$configSvrPorts[2]\\\" }
+			  { _id : 0, host : \"$configSvrHostnames[0]:$configSvrPorts[0]\" },
+      		  { _id : 1, host : \"$configSvrHostnames[1]:$configSvrPorts[1]\" },
+      		  { _id : 2, host : \"$configSvrHostnames[2]:$configSvrPorts[2]\" }
     			]
 		}))'";
 	my $cmdout = `$cmdString`;
@@ -1019,7 +1019,7 @@ sub waitForMongodbReplicaSync {
 
 	my $workloadNum    = $self->getParamValue('workloadNum');
 	my $appInstanceNum = $self->getParamValue('appInstanceNum');
-	$logger->debug( "waitFormongodbReplicaSync for workload $workloadNum, appInstance $appInstanceNum" );
+	$logger->debug( "waitForMongodbReplicaSync for workload $workloadNum, appInstance $appInstanceNum" );
 
 	my $inSync           = 0;
 	while ( !$inSync ) {
