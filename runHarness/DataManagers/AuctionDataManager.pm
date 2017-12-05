@@ -214,10 +214,11 @@ sub prepareData {
 		$mongodbPort   = $nosqlService->portMap->{'mongod'};
 	}
 	else {
-
-		# The mongos will be running on the dataManager
-		$nosqlHostname = $self->getIpAddr();
-		$mongodbPort   = $self->portMap->{'mongos'};
+		# The mongos will be running on an appServer
+		my $appServersRef = $self->appInstance->getActiveServicesByType("appServer");
+		my $appServerRef = $appServersRef->[0];
+		$nosqlHostname = $appServerRef->getIpAddr();
+		$mongodbPort   = $appServerRef->portMap->{'mongos'};
 	}
 
 	my $mongodbReplicaSet = "$nosqlHostname:$mongodbPort";
@@ -689,10 +690,11 @@ sub loadData {
 		$mongodbPort   = $nosqlService->portMap->{'mongod'};
 	}
 	else {
-
-		# The mongos will be running on the data manager
-		$nosqlHostname = $self->getIpAddr();
-		$mongodbPort   = $self->portMap->{'mongos'};
+		# The mongos will be running on an appServer
+		my $appServersRef = $self->appInstance->getActiveServicesByType("appServer");
+		my $appServerRef = $appServersRef->[0];
+		$nosqlHostname = $appServerRef->getIpAddr();
+		$mongodbPort   = $appServerRef->portMap->{'mongos'};
 	}
 
 	my $mongodbReplicaSet = "";
@@ -849,10 +851,11 @@ sub isDataLoaded {
 		$mongodbPort   = $nosqlService->portMap->{'mongod'};
 	}
 	else {
-
-		# The mongos will be running on the dataManager
-		$nosqlHostname = $self->getIpAddr();
-		$mongodbPort   = $self->portMap->{'mongos'};
+		# The mongos will be running on an appServer
+		my $appServersRef = $self->appInstance->getActiveServicesByType("appServer");
+		my $appServerRef = $appServersRef->[0];
+		$nosqlHostname = $appServerRef->getIpAddr();
+		$mongodbPort   = $appServerRef->portMap->{'mongos'};
 	}
 
 	my $mongodbReplicaSet = "$nosqlHostname:$mongodbPort";
@@ -953,9 +956,11 @@ sub cleanData {
 	}
 	else {
 
-		# The mongos will be running on the dataManager
-		$nosqlHostname = $self->getIpAddr();
-		$mongodbPort   = $self->portMap->{'mongos'};
+		# The mongos will be running on an appServer
+		my $appServersRef = $self->appInstance->getActiveServicesByType("appServer");
+		my $appServerRef = $appServersRef->[0];
+		$nosqlHostname = $appServerRef->getIpAddr();
+		$mongodbPort   = $appServerRef->portMap->{'mongos'};
 	}
 
 	my $mongodbReplicaSet = "$nosqlHostname:$mongodbPort";
