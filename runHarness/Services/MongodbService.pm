@@ -485,7 +485,7 @@ sub startMongosServers {
 		}
 		$logger->debug("Started mongos on app server host $appHostname, configdb = $configdbString");
 		
-		appServer->portMap->{'mongos'} = appServer->internalPortMap->{'mongos'};
+		$appServer->portMap->{'mongos'} = $appServer->internalPortMap->{'mongos'};
 	}
 
 	return [$mongosSvrHostnames[0], $mongosSvrPorts[0]];
