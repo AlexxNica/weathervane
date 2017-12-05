@@ -185,7 +185,7 @@ sub prepareData {
 
 	my $dbServersRef    = $self->appInstance->getActiveServicesByType('dbServer');
 	my $nosqlServersRef = $self->appInstance->getActiveServicesByType('nosqlServer');
-	my $nosqlService = $nosqlServicesRef->[0];
+	my $nosqlService = $nosqlServersRef->[0];
 
 	# If the imageStore type is filesystem, then clean added images from the filesystem
 	if ( $self->getParamValue('imageStoreType') eq "filesystem" ) {
@@ -657,6 +657,8 @@ sub loadData {
 	my $dbLoaderOptions = "-d $dbScriptDir/items.json -t " . $self->getParamValue('dbLoaderThreads');
 	$dbLoaderOptions .= " -u $maxUsers ";
 
+	my $nosqlServersRef = $self->appInstance->getActiveServicesByType('nosqlServer');
+	my $nosqlService = $nosqlServersRef->[0];
 	$dbLoaderOptions .= " -m " . $nosqlService->numNosqlShards . " ";
 	$dbLoaderOptions .= " -p " . $nosqlService->numNosqlReplicas . " ";
 
@@ -684,8 +686,6 @@ sub loadData {
 
 	my $nosqlHostname;
 	my $mongodbPort;
-	my $nosqlServersRef = $self->appInstance->getActiveServicesByType('nosqlServer');
-	my $nosqlService = $nosqlServicesRef->[0];
 	if ( $nosqlService->numNosqlShards == 0 ) {
 		my $nosqlService = $nosqlServersRef->[0];
 		$nosqlHostname = $nosqlService->getIpAddr();
@@ -919,7 +919,7 @@ sub cleanData {
 
 	my $dbServersRef    = $self->appInstance->getActiveServicesByType('dbServer');
 	my $nosqlServersRef = $self->appInstance->getActiveServicesByType('nosqlServer');
-	my $nosqlService = $nosqlServicesRef->[0];
+	my $nosqlService = $nosqlServersRef->[0];
 
 	# If the imageStore type is filesystem, then clean added images from the filesystem
 	if ( $self->getParamValue('imageStoreType') eq "filesystem" ) {
