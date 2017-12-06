@@ -147,6 +147,9 @@ sub isUp {
 	my ( $self, $applog ) = @_;
 	my $hostname = $self->host->hostName;
 	my $port     = $self->portMap->{"http"};
+	if (!(defined $port)) {
+		$port  = $self->internalPortMap->{"http"};
+	}
 
 	my $response = `curl -s http://$hostname:$port/auction/healthCheck`;
 	print $applog "curl -s http://$hostname:$port/auction/healthCheck\n";
