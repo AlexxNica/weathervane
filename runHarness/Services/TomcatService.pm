@@ -79,7 +79,7 @@ sub stopInstance {
 		}
 		$logger->debug("Sending prepareForShutdown: curl -s http://$hostname:$port/auction/live/auction/prepareForShutdown");
 		print $applog "curl -s http://$hostname:$port/auction/live/auction/prepareForShutdown\n";
-		my $response = `curl -s http://$hostname:$port/auction/live/auction/prepareForShutdown`;
+		my $response = `curl -s http://$hostname:$port/auction/prepareForShutdown`;
 		$logger->debug("Response: $response");
 		print $applog "$response\n";		
 
