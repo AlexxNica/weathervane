@@ -20,7 +20,7 @@ use Parameters qw(getParamValue);
 use POSIX;
 use JSON;
 use Log::Log4perl qw(get_logger);
-use Utils qw(callMethodOnObjectsParallel callBooleanMethodOnObjectsParallel callMethodsOnObjectParallel);
+use Utils qw(callMethodOnObjectsParamListParallel1 callMethodOnObjectsParallel callBooleanMethodOnObjectsParallel callMethodsOnObjectParallel);
 
 use strict;
 
