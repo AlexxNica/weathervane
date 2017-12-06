@@ -74,6 +74,9 @@ sub stopInstance {
 		# Send a prepare to stop message to the app server
 		my $hostname = $self->host->hostName;
 		my $port     = $self->portMap->{"http"};
+		if (!(defined $port)) {
+			$port  = $self->internalPortMap->{"http"};
+		}
 		$logger->debug("Sending prepareForShutdown: curl -s http://$hostname:$port/auction/prepareForShutdown");
 		print $applog "curl -s http://$hostname:$port/auction/prepareForShutdown\n";
 		my $response = `curl -s http://$hostname:$port/auction/prepareForShutdown`;
