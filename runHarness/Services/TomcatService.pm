@@ -69,7 +69,7 @@ sub stopInstance {
 
 	# Check whether the app server is up
 	print $applog "Checking whether Tomcat is already up on $hostname\n";
-	if ( $self->isUp($applog) ) {
+	if ( $self->isRunning($applog) ) {
 
 		# Send a prepare to stop message to the app server
 		my $hostname = $self->host->hostName;
