@@ -77,7 +77,7 @@ sub stopInstance {
 		$logger->debug("Sending prepareForShutdown: curl -s http://$hostname:$port/auction/prepareForShutdown");
 		print $applog "curl -s http://$hostname:$port/auction/prepareForShutdown\n";
 		my $response = `curl -s http://$hostname:$port/auction/prepareForShutdown`;
-		$logger->debug("Response: $response")
+		$logger->debug("Response: $response");
 		print $applog "$response\n";		
 
 		sleep 15;
