@@ -77,9 +77,9 @@ sub stopInstance {
 		if (!(defined $port)) {
 			$port  = $self->internalPortMap->{"http"};
 		}
-		$logger->debug("Sending prepareForShutdown: curl -s http://$hostname:$port/auction/prepareForShutdown");
-		print $applog "curl -s http://$hostname:$port/auction/prepareForShutdown\n";
-		my $response = `curl -s http://$hostname:$port/auction/prepareForShutdown`;
+		$logger->debug("Sending prepareForShutdown: curl -s http://$hostname:$port/auction/live/auction/prepareForShutdown");
+		print $applog "curl -s http://$hostname:$port/auction/live/auction/prepareForShutdown\n";
+		my $response = `curl -s http://$hostname:$port/auction/live/auction/prepareForShutdown`;
 		$logger->debug("Response: $response");
 		print $applog "$response\n";		
 
