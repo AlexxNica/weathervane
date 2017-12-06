@@ -83,9 +83,8 @@ override 'run' => sub {
 	$debug_logger->debug("killOldWorkloadDrivers");
 	$self->killOldWorkloadDrivers();
 
-	# Now configure docker pinning if requested on any host
-	$debug_logger->debug("configureDockerHostCpuPinning");
-	$self->configureDockerHostCpuPinning();
+	# Now get the cpu and memory config of all hosts
+	$self->getCpuMemConfig();
 
 	# Make sure that the services know their external port numbers
 	$self->setExternalPortNumbers();
