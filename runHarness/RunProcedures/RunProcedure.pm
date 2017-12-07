@@ -460,24 +460,18 @@ sub cleanupAfterFailure {
 		`mkdir -p $cleanupLogDir`;
 	}
 
-	## stop the services
-	my @tiers = qw(frontend backend data infrastructure);
-	callMethodOnObjectsParamListParallel1( "stopServices", [$self], \@tiers, $tmpDir );
-
 	## get the logs
 	$self->getLogFiles();
 
 	## get the config files
 	$self->getConfigFiles();
 
+	## stop the services
+	my @tiers = qw(frontend backend data infrastructure);
+	callMethodOnObjectsParamListParallel1( "stopServices", [$self], \@tiers, $tmpDir );
+
 	# clean up old logs and stats
 	$self->cleanup();
-
-	# Remove the services if they are dockerized
-	$self->removeInfrastructureServices($cleanupLogDir);
-	$self->removeFrontendServices($cleanupLogDir);
-	$self->removeBackendServices($cleanupLogDir);
-	$self->removeDataServices($cleanupLogDir);
 
 	my $resultsDir = "$outputDir/$seqnum";
 	`mkdir -p $resultsDir`;
