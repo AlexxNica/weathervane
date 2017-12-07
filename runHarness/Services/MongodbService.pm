@@ -151,7 +151,8 @@ override 'stop' => sub {
 	my ($self, $serviceType, $logPath)            = @_;
 	my $logger = get_logger("Weathervane::Services::MongodbService");
 	my $console_logger   = get_logger("Console");
-	my $time     = `date +%H:%M`;
+	my $time = `date +%H:%M`;
+	chomp($time);
 	my $logName     = "$logPath/StopMongodb-$time.log";
 	my $appInstance = $self->appInstance;
 	
@@ -289,7 +290,8 @@ override 'start' => sub {
 	my ($self, $serviceType, $users, $logPath)            = @_;
 	my $logger = get_logger("Weathervane::Services::MongodbService");
 	my $console_logger   = get_logger("Console");
-	my $time     = `date +%H:%M`;
+	my $time = `date +%H:%M`;
+	chomp($time);
 	my $logName     = "$logPath/StartMongodb-$time.log";
 	my $appInstance = $self->appInstance;
 	
