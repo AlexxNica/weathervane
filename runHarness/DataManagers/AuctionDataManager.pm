@@ -770,9 +770,14 @@ sub loadData {
 
 	$logger->debug("Exec-ing perl /loadData.pl in container $name");
 	print $applog "Exec-ing perl /loadData.pl in container $name\n";
-	my $cmdOut = $self->host->dockerExec($applog, $name, "perl /loadData.pl");
-	print $applog "Output: $cmdOut\n";
-	$logger->debug("Output: $cmdOut");
+	my $dockerHostString  = $self->host->dockerHostString;
+	
+	open $pipe, "$dockerHostString docker exec $name perl /loadData.pl  |"   or die "Couldn't execute program: $!";
+ 	while ( defined( my $line = <$pipe> )  ) {
+		chomp($line);
+     	$console_logger->info("$line");
+   	}
+   	close $pipe;	
 	close $applog;
 	
 	my $nosqlServersRef = $self->appInstance->getActiveServicesByType('nosqlServer');
