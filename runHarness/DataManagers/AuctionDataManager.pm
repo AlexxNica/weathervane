@@ -67,6 +67,7 @@ sub startAuctionDataManagerContainer {
 	my $logger         = get_logger("Weathervane::DataManager::AuctionDataManager");
 	my $workloadNum    = $self->getParamValue('workloadNum');
 	my $appInstanceNum = $self->getParamValue('appInstanceNum');
+	my $name        = $self->getParamValue('dockerName');
 	
 	# Calculate the values for the environment variables used by the auctiondatamanager container
 	my %envVarMap;
@@ -172,7 +173,7 @@ sub startAuctionDataManagerContainer {
 		$dockerConfigHashRef->{'memory-swap'} = $self->getParamValue('dockerMemorySwap');
 	}	
 	$self->host->dockerRun(
-		$applog, "auctiondatamanagerW${workloadNum}I${appInstanceNum}",
+		$applog, $name,
 		"auctiondatamanager", $directMap, \%portMap, \%volumeMap, \%envVarMap, $dockerConfigHashRef,
 		$entryPoint, $cmd, 0
 	);
