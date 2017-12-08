@@ -772,7 +772,7 @@ sub loadData {
 	print $applog "Exec-ing perl /loadData.pl in container $name\n";
 	my $dockerHostString  = $self->host->dockerHostString;
 	
-	open $pipe, "$dockerHostString docker exec $name perl /loadData.pl  |"   or die "Couldn't execute program: $!";
+	open my $pipe, "$dockerHostString docker exec $name perl /loadData.pl  |"   or die "Couldn't execute program: $!";
  	while ( defined( my $line = <$pipe> )  ) {
 		chomp($line);
      	$console_logger->info("$line");
