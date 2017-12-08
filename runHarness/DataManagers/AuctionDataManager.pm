@@ -834,7 +834,7 @@ sub isDataLoaded {
 	print $applog "Exec-ing perl /isDataLoaded.pl  in container $name\n";
 	$logger->debug("Exec-ing perl /isDataLoaded.pl  in container $name");
 	my $dockerHostString  = $self->host->dockerHostString;	
-	my $cmdOut = system("$dockerHostString docker exec $name perl /isDataLoaded.pl");
+	my $cmdOut = `$dockerHostString docker exec $name perl /isDataLoaded.pl`;
 	print $applog "Output: $cmdOut, \$? = $?\n";
 	$logger->debug("Output: $cmdOut, \$? = $?");
 	close $applog;
