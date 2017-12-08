@@ -652,7 +652,9 @@ sub dockerExec {
 	$logger->debug("name = $name, hostname = $hostname");
 		
 	my $out = `$dockerHostString docker exec $name $commandString 2>&1`;
+	$logger->debug("$dockerHostString docker exec $name $commandString 2>&1");
 	print $logFileHandle "$dockerHostString docker exec $name $commandString 2>&1\n";
+	$logger->debug("output: $out");
 	print $logFileHandle "$out\n";
 	
 	return $out;

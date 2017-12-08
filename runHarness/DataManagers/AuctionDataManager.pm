@@ -179,6 +179,15 @@ sub startAuctionDataManagerContainer {
 	);
 }
 
+sub stopAuctionDataManagerContainer {
+	my ( $self, $users, $applog ) = @_;
+	my $logger         = get_logger("Weathervane::DataManager::AuctionDataManager");
+	my $workloadNum    = $self->getParamValue('workloadNum');
+	my $appInstanceNum = $self->getParamValue('appInstanceNum');
+	my $name        = $self->getParamValue('dockerName');
+
+}
+
 sub prepareData {
 	my ( $self, $users, $logPath ) = @_;
 	my $console_logger = get_logger("Console");
