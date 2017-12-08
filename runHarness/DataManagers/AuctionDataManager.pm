@@ -775,7 +775,9 @@ sub loadData {
 	open my $pipe, "$dockerHostString docker exec $name perl /loadData.pl  |"   or die "Couldn't execute program: $!";
  	while ( defined( my $line = <$pipe> )  ) {
 		chomp($line);
-     	$console_logger->info("$line");
+		if ($line ~= /Loading/) {
+  			print "$line\n";			
+		} 
    	}
    	close $pipe;	
 	close $applog;
@@ -823,10 +825,13 @@ sub isDataLoaded {
 	  || die "Error opening /$logName:$!";
 
 	print $applog "Exec-ing perl /isDataLoaded.pl  in container $name\n";
-	my $cmdOut = $self->host->dockerExec($applog, $name, "perl /isDataLoaded.pl");
-	print $applog "Output: $cmdOut\n";
+	$logger->debug("Exec-ing perl /isDataLoaded.pl  in container $name");
+	my $dockerHostString  = $self->host->dockerHostString;	
+	my $cmdOut = system("$dockerHostString docker exec $name perl /isDataLoaded.pl");
+	print $applog "Output: $cmdOut, \$? = $?\n";
+	$logger->debug("Output: $cmdOut, \$? = $?");
 	close $applog;
-	if ($cmdOut) {
+	if ($?) {
 		$logger->debug( "Data is not loaded for workload $workloadNum, appInstance $appInstanceNum. \$cmdOut = $cmdOut" );
 		return 0;
 	}
