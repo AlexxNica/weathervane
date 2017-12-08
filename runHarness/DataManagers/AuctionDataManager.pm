@@ -775,7 +775,7 @@ sub loadData {
 	open my $pipe, "$dockerHostString docker exec $name perl /loadData.pl  |"   or die "Couldn't execute program: $!";
  	while ( defined( my $line = <$pipe> )  ) {
 		chomp($line);
-		if ($line ~= /Loading/) {
+		if ($line =~ /Loading/) {
   			print "$line\n";			
 		} 
    	}
