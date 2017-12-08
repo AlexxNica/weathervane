@@ -62,6 +62,122 @@ override 'initialize' => sub {
 
 };
 
+sub startAuctionDataManagerContainer {
+	my ( $self, $users, $appLog ) = @_;
+	my $logger         = get_logger("Weathervane::DataManager::AuctionDataManager");
+	my $workloadNum    = $self->getParamValue('workloadNum');
+	my $appInstanceNum = $self->getParamValue('appInstanceNum');
+	
+	# Calculate the values for the environment variables used by the auctiondatamanager container
+	my %envVarMap;
+	$envVarMap{"USERSPERAUCTIONSCALEFACTOR"} = $self->getParamValue('usersPerAuctionScaleFactor');	
+	$envVarMap{"MAXUSERS"} = $self->getParamValue('maxUsers');	
+	$envVarMap{"WORKLOADNUM"} = $workloadNum;	
+	$envVarMap{"APPINSTANCENUM"} = $appInstanceNum;	
+
+	my $maxDuration = $self->getParamValue('maxDuration');
+	my $totalTime =
+	  $self->getParamValue('rampUp') + $self->getParamValue('steadyState') + $self->getParamValue('rampDown');
+	$envVarMap{"MAXDURATION"} = max( $maxDuration, $totalTime );
+
+	my $nosqlServersRef = $self->appInstance->getActiveServicesByType('nosqlServer');
+	my $nosqlServerRef = $nosqlServersRef->[0];
+	my $numNosqlShards = $nosqlServerRef->numNosqlShards;
+	$envVarMap{"NUMNOSQLSHARDS"} = $numNosqlShards;
+	
+	my $numNosqlReplicas = $nosqlServerRef->numNosqlReplicas;
+	$envVarMap{"NUMNOSQLREPLICAS"} = $numNosqlReplicas;
+	
+	my $mongodbHostname;
+	my $mongodbPort;
+	if ( $nosqlServerRef->numNosqlShards == 0 ) {
+		$mongodbHostname = $nosqlServerRef->getIpAddr();
+		$mongodbPort   = $nosqlServerRef->portMap->{'mongod'};
+	}
+	else {
+		# The mongos will be running on an appServer
+		my $appServersRef = $self->appInstance->getActiveServicesByType("appServer");
+		my $appServerRef = $appServersRef->[0];
+		$mongodbHostname = $appServerRef->getIpAddr();
+		$mongodbPort   = $appServerRef->portMap->{'mongos'};
+	}
+
+	my $mongodbReplicaSet = "$mongodbHostname:$mongodbPort";
+	if ( $nosqlServerRef->numNosqlReplicas > 0 ) {
+		for ( my $i = 1 ; $i <= $#{$nosqlServersRef} ; $i++ ) {
+			my $nosqlService  = $nosqlServersRef->[$i];
+			my $mongodbHostname = $nosqlService->getIpAddr();
+			my $mongodbPort   = $nosqlService->portMap->{'mongod'};
+			$mongodbReplicaSet .= ",$mongodbHostname:$mongodbPort";
+		}
+	}
+	$envVarMap{"MONGODBHOSTNAME"} = $mongodbHostname;
+	$envVarMap{"MONGODBPORT"} = $mongodbPort;
+	$envVarMap{"MONGODBREPLICASET"} = $mongodbReplicaSet;
+	
+	my $dbServicesRef = $self->appInstance->getActiveServicesByType("dbServer");
+	my $dbService     = $dbServicesRef->[0];
+	my $dbHostname    = $dbService->getIpAddr();
+	my $dbPort        = $dbService->portMap->{ $dbService->getImpl() };
+	$envVarMap{"DBHOSTNAME"} = $dbHostname;
+	$envVarMap{"DBPORT"} = $dbPort;
+	
+	my $springProfilesActive = $self->appInstance->getSpringProfilesActive();
+	$envVarMap{"SPRINGPROFILESACTIVE"} = $springProfilesActive;
+	
+	# Start the  auctiondatamanager container
+	my %volumeMap;
+	my %portMap;
+	my $directMap = 0;
+	my $cmd        = "";
+	my $entryPoint = "";
+	my $dockerConfigHashRef = {};	
+	if ($self->getParamValue('dockerNet')) {
+		$dockerConfigHashRef->{'net'} = $self->getParamValue('dockerNet');
+	}
+	if ($self->getParamValue('dockerCpus')) {
+		$dockerConfigHashRef->{'cpus'} = $self->getParamValue('dockerCpus');
+	}
+	if ($self->getParamValue('dockerCpuShares')) {
+		$dockerConfigHashRef->{'cpu-shares'} = $self->getParamValue('dockerCpuShares');
+	} 
+	if ($self->getParamValue('dockerCpuSetCpus') ne "unset") {
+		$dockerConfigHashRef->{'cpuset-cpus'} = $self->getParamValue('dockerCpuSetCpus');
+		
+		if ($self->getParamValue('dockerCpus') == 0) {
+			# Parse the CpuSetCpus parameter to determine how many CPUs it covers and 
+			# set dockerCpus accordingly so that services can know how many CPUs the 
+			# container has when configuring
+			my $numCpus = 0;
+			my @cpuGroups = split(/,/, $self->getParamValue('dockerCpuSetCpus'));
+			foreach my $cpuGroup (@cpuGroups) {
+				if ($cpuGroup =~ /-/) {
+					# This cpu group is a range
+					my @rangeEnds = split(/-/,$cpuGroup);
+					$numCpus += ($rangeEnds[1] - $rangeEnds[0] + 1);
+				} else {
+					$numCpus++;
+				}
+			}
+			$self->setParamValue('dockerCpus', $numCpus);
+		}
+	}
+	if ($self->getParamValue('dockerCpuSetMems') ne "unset") {
+		$dockerConfigHashRef->{'cpuset-mems'} = $self->getParamValue('dockerCpuSetMems');
+	}
+	if ($self->getParamValue('dockerMemory')) {
+		$dockerConfigHashRef->{'memory'} = $self->getParamValue('dockerMemory');
+	}
+	if ($self->getParamValue('dockerMemorySwap')) {
+		$dockerConfigHashRef->{'memory-swap'} = $self->getParamValue('dockerMemorySwap');
+	}	
+	$self->host->dockerRun(
+		$applog, "auctiondatamanagerW${workloadNum}I${appInstanceNum}",
+		"auctiondatamanager", $directMap, \%portMap, \%volumeMap, \%envVarMap, $dockerConfigHashRef,
+		$entryPoint, $cmd, 0
+	);
+}
+
 sub prepareData {
 	my ( $self, $users, $logPath ) = @_;
 	my $console_logger = get_logger("Console");
@@ -71,6 +187,13 @@ sub prepareData {
 	my $reloadDb       = $self->getParamValue('reloadDb');
 	my $appInstance    = $self->appInstance;
 	my $retVal         = 0;
+
+	my $logName = "$logPath/PrepareData_W${workloadNum}I${appInstanceNum}.log";
+	my $logHandle;
+	open( $logHandle, ">$logName" ) or do {
+		$console_logger->error("Error opening $logName:$!");
+		return 0;
+	};
 
 	$console_logger->info(
 		"Configuring and starting data services for appInstance $appInstanceNum of workload $workloadNum.\n" );
@@ -98,66 +221,7 @@ sub prepareData {
 	}
 	$logger->debug( "All data services are up for appInstance $appInstanceNum of workload $workloadNum." );
 
-	# Calculate the values for the environment variables used by the auctiondatamanager container
-	my %envVarMap;
-	$envVarMap{"USERSPERAUCTIONSCALEFACTOR"} = $self->getParamValue('usersPerAuctionScaleFactor');	
-	$envVarMap{"MAXUSERS"} = $self->getParamValue('maxUsers');	
-	$envVarMap{"WORKLOADNUM"} = $workloadNum;	
-	$envVarMap{"APPINSTANCENUM"} = $appInstanceNum;	
-
-	my $maxDuration = $self->getParamValue('maxDuration');
-	my $totalTime =
-	  $self->getParamValue('rampUp') + $self->getParamValue('steadyState') + $self->getParamValue('rampDown');
-	$envVarMap{"MAXDURATION"} = max( $maxDuration, $totalTime );
-
-	my $nosqlServersRef = $self->appInstance->getActiveServicesByType('nosqlServer');
-	my $nosqlServerRef = $nosqlServersRef->[0];
-	my $numNosqlShards = $nosqlServerRef->numNosqlShards;
-	$envVarMap{"NUMNOSQLSHARDS"} = $numNosqlShards;
-	
-	my $numNosqlReplicas = $nosqlServerRef->numNosqlReplicas;
-	$envVarMap{"NUMNOSQLREPLICAS"} = $numNosqlReplicas;
-	
-	my $mongodbHostname;
-	my $mongodbPort;
-	if ( $nosqlService->numNosqlShards == 0 ) {
-		$mongodbHostname = $nosqlService->getIpAddr();
-		$mongodbPort   = $nosqlService->portMap->{'mongod'};
-	}
-	else {
-		# The mongos will be running on an appServer
-		my $appServersRef = $self->appInstance->getActiveServicesByType("appServer");
-		my $appServerRef = $appServersRef->[0];
-		$mongodbHostname = $appServerRef->getIpAddr();
-		$mongodbPort   = $appServerRef->portMap->{'mongos'};
-	}
-
-	my $mongodbReplicaSet = "$mongodbHostname:$mongodbPort";
-	if ( $nosqlService->numNosqlReplicas > 0 ) {
-		for ( my $i = 1 ; $i <= $#{$nosqlServicesRef} ; $i++ ) {
-			my $nosqlService  = $nosqlServicesRef->[$i];
-			my $mongodbHostname = $nosqlService->getIpAddr();
-			my $mongodbPort   = $nosqlService->portMap->{'mongod'};
-			$mongodbReplicaSet .= ",$mongodbHostname:$mongodbPort";
-		}
-	}
-	$envVarMap{"MONGODBHOSTNAME"} = $mongodbHostname;
-	$envVarMap{"MONGODBPORT"} = $mongodbPort;
-	$envVarMap{"MONGODBREPLICASET"} = $mongodbReplicaSet;
-	
-
-	my $dbServicesRef = $self->appInstance->getActiveServicesByType("dbServer");
-	my $dbService     = $dbServicesRef->[0];
-	my $dbHostname    = $dbService->getIpAddr();
-	my $dbPort        = $dbService->portMap->{ $dbService->getImpl() };
-	$envVarMap{"DBHOSTNAME"} = $dbHostname;
-	$envVarMap{"DBPORT"} = $dbPort;
-	
-	my $springProfilesActive = $self->appInstance->getSpringProfilesActive();
-	$envVarMap{"SPRINGPROFILESACTIVE"} = $springProfilesActive;
-	
-	# Start the  auctiondatamanager container
-	
+	$self->startAuctionDataManagerContainer ($users, $logHandle);
 		
 	my $loadedData = 0;
 	if ($reloadDb) {
@@ -253,13 +317,6 @@ sub prepareData {
 		}
 
 	}
-
-	my $logName = "$logPath/PrepareData_W${workloadNum}I${appInstanceNum}.log";
-	my $logHandle;
-	open( $logHandle, ">$logName" ) or do {
-		$console_logger->error("Error opening $logName:$!");
-		return 0;
-	};
 
 	print $logHandle "Preparing auctions to be active in current run\n";
 	my $nosqlHostname;
@@ -675,7 +732,9 @@ sub loadData {
 	my ( $self, $users, $logPath ) = @_;
 	my $console_logger   = get_logger("Console");
 	my $logger           = get_logger("Weathervane::DataManager::AuctionDataManager");
-	my $hostname         = $self->host->hostName;
+	my $hostname    = $self->host->hostName;
+	my $name        = $self->getParamValue('dockerName');
+
 	my $workloadNum    = $self->getParamValue('workloadNum');
 	my $appInstanceNum = $self->getParamValue('appInstanceNum');
 	my $logName          = "$logPath/loadData-W${workloadNum}I${appInstanceNum}-$hostname.log";
@@ -691,152 +750,20 @@ sub loadData {
 		return 0;
 	  };
 
-	my $maxUsers = $self->getParamValue('maxUsers');
-	if ( $users > $maxUsers ) {
-		$maxUsers = $users;
-	}
-
 	$console_logger->info(
 		"Workload $workloadNum, appInstance $appInstanceNum: Loading data for a maximum of $maxUsers users" );
 
-	# if the number of auctions wasn't explicitly set, determine based on
-	# the usersPerAuctionScaleFactor
-	my $auctions = $self->getParamValue('auctions');
-	if ( !$auctions ) {
-		$auctions = ceil( $users / $self->getParamValue('usersPerAuctionScaleFactor') );
-	}
-
-
-	# Load the data
-	my $dbScriptDir     = $self->getParamValue('dbScriptDir');
-	my $dbLoaderOptions = "-d $dbScriptDir/items.json -t " . $self->getParamValue('dbLoaderThreads');
-	$dbLoaderOptions .= " -u $maxUsers ";
-
-	my $nosqlServersRef = $self->appInstance->getActiveServicesByType('nosqlServer');
-	my $nosqlService = $nosqlServersRef->[0];
-	$dbLoaderOptions .= " -m " . $nosqlService->numNosqlShards . " ";
-	$dbLoaderOptions .= " -p " . $nosqlService->numNosqlReplicas . " ";
-
-	my $maxDuration = $self->getParamValue('maxDuration');
-	my $totalTime =
-	  $self->getParamValue('rampUp') + $self->getParamValue('steadyState') + $self->getParamValue('rampDown');
-	$dbLoaderOptions .= " -f " . max( $maxDuration, $totalTime ) . " ";
-
-	$dbLoaderOptions .= " -a 'Workload $workloadNum, appInstance $appInstanceNum.' ";
-	if ( $self->getParamValue('dbLoaderImageDir') ) {
-		$dbLoaderOptions .= " -r \"" . $self->getParamValue('dbLoaderImageDir') . "\"";
-	}
-
-	my $dbLoaderJavaOptions = "";
-	if ( $self->getParamValue('dbLoaderEnableJprofiler') ) {
-		$dbLoaderJavaOptions .=
-		  "  -agentpath:/opt/jprofiler7/bin/linux-x64/libjprofilerti.so=port=8849,nowait -XX:MaxPermSize=400m ";
-	}
-
-	my $springProfilesActive = $appInstance->getSpringProfilesActive();
-	$springProfilesActive .= ",dbloader";
-
-	my $dbLoaderClasspath = $self->dbLoaderClasspath;
-	my $heap              = $self->getParamValue('dbLoaderHeap');
-
-	my $nosqlHostname;
-	my $mongodbPort;
-	if ( $nosqlService->numNosqlShards == 0 ) {
-		my $nosqlService = $nosqlServersRef->[0];
-		$nosqlHostname = $nosqlService->getIpAddr();
-		$mongodbPort   = $nosqlService->portMap->{'mongod'};
-	}
-	else {
-		# The mongos will be running on an appServer
-		my $appServersRef = $self->appInstance->getActiveServicesByType("appServer");
-		my $appServerRef = $appServersRef->[0];
-		$nosqlHostname = $appServerRef->getIpAddr();
-		$mongodbPort   = $appServerRef->portMap->{'mongos'};
-	}
-
-	my $mongodbReplicaSet = "";
-	for ( my $i = 0 ; $i <= $#{$nosqlServersRef} ; $i++ ) {
-		my $nosqlService  = $nosqlServersRef->[$i];
-		my $nosqlHostname = $nosqlService->getIpAddr();
-		my $replicaPort;
-		if ($i == 0) {
-			$replicaPort = $nosqlService->internalPortMap->{'mongod'};
-			print $applog "Creating mongodbReplicaSet define.  $nosqlHostname is primary ($nosqlHostname), using port $replicaPort.\n";
-			$mongodbReplicaSet .= "$nosqlHostname:$replicaPort";
-		} else {
-			$replicaPort = $nosqlService->portMap->{'mongod'};
-			print $applog "Creating mongodbReplicaSet define.  $nosqlHostname is secondary, using port $replicaPort.\n";
-			$mongodbReplicaSet .= ",$nosqlHostname:$replicaPort";
-		}
-	}
-
-	my $dbServicesRef = $self->appInstance->getActiveServicesByType('dbServer');
-	my $dbService     = $dbServicesRef->[0];
-	my $dbHostname    = $dbService->getIpAddr();
-	my $dbPort        = $dbService->portMap->{ $dbService->getImpl() };
-
-	my $ppid = fork();
-	if ( $ppid == 0 ) {
-		print $applog "Starting dbLoader\n";
-		my $cmdString =
-"java -Xmx$heap -Xms$heap $dbLoaderJavaOptions -Dwkld=W${workloadNum}I${appInstanceNum} -cp $dbLoaderClasspath -Dspring.profiles.active=\"$springProfilesActive\" -DDBHOSTNAME=$dbHostname -DDBPORT=$dbPort -DMONGODB_HOST=$nosqlHostname -DMONGODB_PORT=$mongodbPort -DMONGODB_REPLICA_SET=$mongodbReplicaSet com.vmware.weathervane.auction.dbloader.DBLoader $dbLoaderOptions ";
-		my $cmdOut =
-`$sshConnectString "$cmdString 2>&1 | tee /tmp/dbLoader_W${workloadNum}I${appInstanceNum}.log" 2>&1  > $logPath/dbLoader_W${workloadNum}I${appInstanceNum}.log `;
-		print $applog "$sshConnectString $cmdString\n";
-		print $applog $cmdOut;
-		exit;
-	}
-
-	# get the pid of the dbLoader process
-	sleep(30);
-	my $loaderPid = "";
-	my $out = `$sshConnectString ps x`;
-	$logger->debug("Looking for pid of dbLoader_W${workloadNum}I${appInstanceNum}: $out");
-	if ( $out =~ /^\s*(\d+)\s\?.*\d\d\sjava.*-Dwkld=W${workloadNum}I${appInstanceNum}.*DBLoader/m ) {
-		$loaderPid = $1;
-		$logger->debug("Found pid $loaderPid for dbLoader_W${workloadNum}I${appInstanceNum}");
-	}
-	else {
-		# Check again if the data is loaded.  The dbLoader may have finished
-		# before 30 seconds
-		my $isDataLoaded = 0;
-		try {
-			$isDataLoaded = $self->isDataLoaded( $users, $logPath );
-		};
-
-		if ( !$isDataLoaded ) {
-			# check one last time for the pid
-			my $out = `$sshConnectString ps x`;
-			$logger->debug("Looking for pid of dbLoader_W${workloadNum}I${appInstanceNum}: $out");
-			if ( $out =~ /^\s*(\d+)\s\?.*\d\d\sjava.*-Dwkld=W${workloadNum}I${appInstanceNum}.*DBLoader/m ) {
-				$loaderPid = $1;
-				$logger->debug("Found pid $loaderPid for dbLoader_W${workloadNum}I${appInstanceNum}");
-			} else {
-				$console_logger->error( "Can't find dbloader pid for workload $workloadNum, appInstance $appInstanceNum" );
-				return 0;
-			}		
-		}
-	}
-
-	if ($loaderPid) {
-		# open a pipe to follow progress
-		open my $driver, "$sshConnectString tail -f --pid=$loaderPid /tmp/dbLoader_W${workloadNum}I${appInstanceNum}.log |"
-		  or do {
-			$console_logger->error(
-				"Can't fork to follow dbloader at $logPath/dbLoader_W${workloadNum}I${appInstanceNum}.log : $!" );
-			return 0;
-		  };
-
-		while ( my $inline = <$driver> ) {
-			if (!($inline =~ /^\d\d\:\d\d/)) {
-				print $inline;
-			}
-		}
-		close $driver;
-	}
+	$logger->debug("Exec-ing perl /loadData.pl in container $name");
+	print $applog "Exec-ing perl /loadData.pl in container $name\n";
+	my $cmdOut = $self->host->dockerExec($applog, $name, "perl /loadData.pl");
+	print $applog "Output: $cmdOut\n";
+	$logger->debug("Output: $cmdOut");
+	close $applog;
 	
-	if (   ( $nosqlService->numNosqlReplicas > 0 )
-		&& ( $nosqlService->numNosqlShards == 0 ) )
+	my $nosqlServersRef = $self->appInstance->getActiveServicesByType('nosqlServer');
+	my $nosqlServerRef = $nosqlServersRef->[0];
+	if (   ( $nosqlServerRef->numNosqlReplicas > 0 )
+		&& ( $nosqlServerRef->numNosqlShards == 0 ) )
 	{
 		$console_logger->info("Waiting for MongoDB Replicas to finish synchronizing.");
 		waitForMongodbReplicaSync( $self, $applog );
@@ -868,74 +795,18 @@ sub isDataLoaded {
 	$logger->debug("isDataLoaded for workload $workloadNum, appInstance $appInstanceNum");
 
 	my $hostname = $self->host->hostName;
+	my $name        = $self->getParamValue('dockerName');
 
 	my $logName = "$logPath/isDataLoaded-W${workloadNum}I${appInstanceNum}-$hostname.log";
 	my $applog;
 	open( $applog, ">$logName" )
 	  || die "Error opening /$logName:$!";
 
-	# if the number of auctions wasn't explicitly set, determine based on
-	# the usersPerAuctionScaleFactor
-	my $auctions = $self->getParamValue('auctions');
-	if ( !$auctions ) {
-		$auctions = ceil( $users / $self->getParamValue('usersPerAuctionScaleFactor') );
-	}
-
-	my $nosqlServicesRef = $self->appInstance->getActiveServicesByType("nosqlServer");
-	my $nosqlService = $nosqlServicesRef->[0];
-
-	my $dbPrepOptions = " -a $auctions -c ";
-	$dbPrepOptions .= " -m " . $nosqlService->numNosqlShards . " ";
-	$dbPrepOptions .= " -p " . $nosqlService->numNosqlReplicas . " ";
-
-	my $maxDuration = $self->getParamValue('maxDuration');
-	my $totalTime =
-	  $self->getParamValue('rampUp') + $self->getParamValue('steadyState') + $self->getParamValue('rampDown');
-	$dbPrepOptions .= " -f " . max( $maxDuration, $totalTime ) . " ";
-	$dbPrepOptions .= " -u " . $users . " ";
-
-	my $springProfilesActive = $self->appInstance->getSpringProfilesActive();
-	$springProfilesActive .= ",dbprep";
-
-	my $dbLoaderClasspath = $self->dbLoaderClasspath;
-
-	my $nosqlHostname;
-	my $mongodbPort;
-	if ( $nosqlService->numNosqlShards == 0 ) {
-		$nosqlHostname = $nosqlService->getIpAddr();
-		$mongodbPort   = $nosqlService->portMap->{'mongod'};
-	}
-	else {
-		# The mongos will be running on an appServer
-		my $appServersRef = $self->appInstance->getActiveServicesByType("appServer");
-		my $appServerRef = $appServersRef->[0];
-		$nosqlHostname = $appServerRef->getIpAddr();
-		$mongodbPort   = $appServerRef->portMap->{'mongos'};
-	}
-
-	my $mongodbReplicaSet = "$nosqlHostname:$mongodbPort";
-	if ( $nosqlService->numNosqlReplicas > 0 ) {
-		for ( my $i = 1 ; $i <= $#{$nosqlServicesRef} ; $i++ ) {
-			my $nosqlService  = $nosqlServicesRef->[$i];
-			my $nosqlHostname = $nosqlService->getIpAddr();
-			my $mongodbPort   = $nosqlService->portMap->{'mongod'};
-			$mongodbReplicaSet .= ",$nosqlHostname:$mongodbPort";
-		}
-	}
-
-	my $dbServicesRef = $self->appInstance->getActiveServicesByType("dbServer");
-	my $dbService     = $dbServicesRef->[0];
-	my $dbHostname    = $dbService->getIpAddr();
-	my $dbPort        = $dbService->portMap->{ $dbService->getImpl() };
-
-	my $sshConnectString = $self->host->sshConnectString;
-	print $applog
-"$sshConnectString java -client -cp $dbLoaderClasspath -Dspring.profiles.active=\"$springProfilesActive\" -DDBHOSTNAME=$dbHostname -DDBPORT=$dbPort -DMONGODB_HOST=$nosqlHostname -DMONGODB_PORT=$mongodbPort -DMONGODB_REPLICA_SET=$mongodbReplicaSet com.vmware.weathervane.auction.dbloader.DBPrep $dbPrepOptions 2>&1\n";
-	my $cmdOut =
-`$sshConnectString java -client -cp $dbLoaderClasspath -Dspring.profiles.active=\"$springProfilesActive\" -DDBHOSTNAME=$dbHostname -DDBPORT=$dbPort -DMONGODB_HOST=$nosqlHostname -DMONGODB_PORT=$mongodbPort -DMONGODB_REPLICA_SET=$mongodbReplicaSet com.vmware.weathervane.auction.dbloader.DBPrep $dbPrepOptions 2>&1`;
-	print $applog $cmdOut;
-	print $applog "$? \n";
-	if ($?) {
+	print $applog "Exec-ing perl /isDataLoaded.pl  in container $name\n";
+	my $cmdOut = $self->host->dockerExec($applog, $name, "perl /isDataLoaded.pl");
+	print $applog "Output: $cmdOut\n";
+	close $applog;
+	if ($cmdOut) {
 		$logger->debug( "Data is not loaded for workload $workloadNum, appInstance $appInstanceNum. \$? = $?" );
 		return 0;
 	}
@@ -944,7 +815,6 @@ sub isDataLoaded {
 		return 1;
 	}
 
-	close $applog;
 
 }
 
