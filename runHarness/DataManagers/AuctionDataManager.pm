@@ -180,11 +180,13 @@ sub startAuctionDataManagerContainer {
 }
 
 sub stopAuctionDataManagerContainer {
-	my ( $self, $users, $applog ) = @_;
+	my ( $self, $applog ) = @_;
 	my $logger         = get_logger("Weathervane::DataManager::AuctionDataManager");
 	my $workloadNum    = $self->getParamValue('workloadNum');
 	my $appInstanceNum = $self->getParamValue('appInstanceNum');
 	my $name        = $self->getParamValue('dockerName');
+
+	$self->host->dockerStopAndRemove( $applog, $name );
 
 }
 
@@ -393,6 +395,9 @@ sub prepareData {
 		$console_logger->info("Waiting for MongoDB Replicas to finish synchronizing.");
 		waitForMongodbReplicaSync( $self, $logHandle );
 	}
+
+	# stop the auctiondatamanager container
+	$self->stopAuctionDataManagerContainer ($logHandle);
 
 	# stop the data services. They must be started in the main process
 	# so that the port numbers are available

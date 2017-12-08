@@ -27,8 +27,8 @@ my $cmdOut = `$cmdString`;
 print "$cmdOut\n";
 
 if ($?) {
-	exit 0;
+	exit 1;
 }
 else {
-	exit 1;
+	exit 0;
 }
