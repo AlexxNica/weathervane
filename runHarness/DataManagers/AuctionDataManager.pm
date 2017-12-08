@@ -175,7 +175,7 @@ sub startAuctionDataManagerContainer {
 	$self->host->dockerRun(
 		$applog, $name,
 		"auctiondatamanager", $directMap, \%portMap, \%volumeMap, \%envVarMap, $dockerConfigHashRef,
-		$entryPoint, $cmd, 0
+		$entryPoint, $cmd, 1
 	);
 }
 
@@ -822,11 +822,11 @@ sub isDataLoaded {
 	print $applog "Output: $cmdOut\n";
 	close $applog;
 	if ($cmdOut) {
-		$logger->debug( "Data is not loaded for workload $workloadNum, appInstance $appInstanceNum. \$? = $?" );
+		$logger->debug( "Data is not loaded for workload $workloadNum, appInstance $appInstanceNum. \$cmdOut = $cmdOut" );
 		return 0;
 	}
 	else {
-		$logger->debug( "Data is loaded for workload $workloadNum, appInstance $appInstanceNum. \$? = $?" );
+		$logger->debug( "Data is loaded for workload $workloadNum, appInstance $appInstanceNum. \$cmdOut = $cmdOut" );
 		return 1;
 	}
 
