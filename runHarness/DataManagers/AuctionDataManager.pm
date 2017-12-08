@@ -69,6 +69,8 @@ sub startAuctionDataManagerContainer {
 	my $appInstanceNum = $self->getParamValue('appInstanceNum');
 	my $name        = $self->getParamValue('dockerName');
 	
+	$self->host->dockerStopAndRemove( $applog, $name );
+
 	# Calculate the values for the environment variables used by the auctiondatamanager container
 	my %envVarMap;
 	$envVarMap{"USERSPERAUCTIONSCALEFACTOR"} = $self->getParamValue('usersPerAuctionScaleFactor');	
