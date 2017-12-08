@@ -63,7 +63,7 @@ override 'initialize' => sub {
 };
 
 sub startAuctionDataManagerContainer {
-	my ( $self, $users, $appLog ) = @_;
+	my ( $self, $users, $applog ) = @_;
 	my $logger         = get_logger("Weathervane::DataManager::AuctionDataManager");
 	my $workloadNum    = $self->getParamValue('workloadNum');
 	my $appInstanceNum = $self->getParamValue('appInstanceNum');
@@ -749,6 +749,11 @@ sub loadData {
 		$console_logger->error("Error opening $logName:$!");
 		return 0;
 	  };
+
+	my $maxUsers = $self->getParamValue('maxUsers');	
+	if ( $users > $maxUsers ) {
+		$maxUsers = $users;
+	}
 
 	$console_logger->info(
 		"Workload $workloadNum, appInstance $appInstanceNum: Loading data for a maximum of $maxUsers users" );
