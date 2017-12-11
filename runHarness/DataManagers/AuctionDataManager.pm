@@ -807,7 +807,7 @@ sub cleanData {
 
 	$console_logger->info(
 		"Cleaning and compacting storage on all data services.  This can take a long time after large runs." );
-	$logger->debug("cleanData.  user = $users, logPath = $logPath");
+	$logger->debug("cleanData.  user = $users");
 
 	# If the imageStore type is filesystem, then clean added images from the filesystem
 	if ( $self->getParamValue('imageStoreType') eq "filesystem" ) {
@@ -826,8 +826,6 @@ sub cleanData {
 		}
 
 	}
-
-	$logger->debug("cleanData. opened log $logName");
 
 	$logger->debug(
 		"cleanData. Cleaning up data services for appInstance " . "$appInstanceNum of workload $workloadNum." );
