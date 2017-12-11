@@ -15,7 +15,6 @@ COPY items.json /items.json
 	
 RUN yum install -y java-1.8.0-openjdk && \
 	yum install -y java-1.8.0-openjdk-devel && \
-	yum -y install mongodb-org && \
     yum -y clean all && \
     chmod +x /entrypoint.sh
 

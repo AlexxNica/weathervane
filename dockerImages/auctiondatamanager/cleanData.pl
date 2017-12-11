@@ -5,8 +5,6 @@ use POSIX;
 
 print "Cleaning data\n";
 
-# the usersPerAuctionScaleFactor
-
 # Not preparing any auctions, just cleaning up
 my $auctions = 0;
 
