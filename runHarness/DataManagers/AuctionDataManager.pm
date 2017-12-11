@@ -839,7 +839,6 @@ sub cleanData {
 		"cleanData. Cleaning up data services for appInstance " . "$appInstanceNum of workload $workloadNum." );
 	print $logHandle "Cleaning up data services for appInstance " . "$appInstanceNum of workload $workloadNum.\n";
 
-	$self->startAuctionDataManagerContainer ($appInstance->users, $logHandle);
 	print $logHandle "Exec-ing perl /cleanData.pl  in container $name\n";
 	$logger->debug("Exec-ing perl /cleanData.pl  in container $name");
 	my $dockerHostString  = $self->host->dockerHostString;	
@@ -853,8 +852,6 @@ sub cleanData {
 		);
 		return 0;
 	}
-
-	$self->stopAuctionDataManagerContainer ($logHandle);
 
 	my $nosqlServersRef = $self->appInstance->getActiveServicesByType('nosqlServer');
 	my $nosqlService = $nosqlServersRef->[0];
