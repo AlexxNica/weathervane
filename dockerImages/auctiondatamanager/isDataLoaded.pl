@@ -12,7 +12,13 @@ my $dbPrepOptions = " -a $auctions -c ";
 $dbPrepOptions .= " -m $ENV{'NUMNOSQLSHARDS'} ";
 $dbPrepOptions .= " -p $ENV{'NUMNOSQLREPLICAS'} ";
 $dbPrepOptions .= " -f $ENV{'MAXDURATION'} ";
-$dbPrepOptions .= " -u $ENV{'USERS'} ";
+
+my $users = $ENV{'USERS'};
+my $maxUsers = $ENV{'MAXUSERS'};
+if ( $users > $maxUsers ) {
+	$maxUsers = $users;
+}
+$dbPrepOptions .= " -u $maxUsers ";
 
 my $springProfilesActive = $ENV{'SPRINGPROFILESACTIVE'};
 $springProfilesActive .= ",dbprep";
