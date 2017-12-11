@@ -300,7 +300,7 @@ sub prepareData {
 				  . "$appInstanceNum of workload $workloadNum.  Preparing data for current run." );
 
 			# cleanup the databases from any previous run
-			$self->cleanData( $users, $logPath );
+			$self->cleanData( $users, $logHandle );
 
 		}
 	}
@@ -794,7 +794,7 @@ sub isDataLoaded {
 
 
 sub cleanData {
-	my ( $self, $users, $logPath ) = @_;
+	my ( $self, $users, $logHandle ) = @_;
 	my $console_logger = get_logger("Console");
 	my $logger         = get_logger("Weathervane::DataManager::AuctionDataManager");
 	my $workloadNum    = $self->getParamValue('workloadNum');
@@ -827,12 +827,6 @@ sub cleanData {
 
 	}
 
-	my $logName = "$logPath/CleanData_W${workloadNum}I${appInstanceNum}.log";
-	my $logHandle;
-	open( $logHandle, ">$logName" ) or do {
-		$console_logger->error("Error opening $logName:$!");
-		return 0;
-	};
 	$logger->debug("cleanData. opened log $logName");
 
 	$logger->debug(
@@ -949,7 +943,6 @@ sub cleanData {
 
 		}
 	}
-	close $logHandle;
 }
 
 __PACKAGE__->meta->make_immutable;
