@@ -356,6 +356,7 @@ sub pretouchData {
 	my $logger         = get_logger("Weathervane::DataManager::AuctionDataManager");
 	my $workloadNum    = $self->getParamValue('workloadNum');
 	my $appInstanceNum = $self->getParamValue('appInstanceNum');
+	my $name        = $self->getParamValue('dockerName');
 	my $retVal         = 0;
 	$logger->debug( "pretouchData for workload ", $workloadNum );
 
@@ -802,20 +803,10 @@ sub cleanData {
 	my $appInstance = $self->appInstance;
 	my $retVal      = 0;
 
-	my $springProfilesActive = $self->appInstance->getSpringProfilesActive();
-	$springProfilesActive .= ",dbprep";
-	my $dbLoaderClasspath = $self->dbLoaderClasspath;
 
 	$console_logger->info(
 		"Cleaning and compacting storage on all data services.  This can take a long time after large runs." );
 	$logger->debug("cleanData.  user = $users, logPath = $logPath");
-
-	# Not preparing any auctions, just cleaning up
-	my $auctions = 0;
-
-	my $dbServersRef    = $self->appInstance->getActiveServicesByType('dbServer');
-	my $nosqlServersRef = $self->appInstance->getActiveServicesByType('nosqlServer');
-	my $nosqlService = $nosqlServersRef->[0];
 
 	# If the imageStore type is filesystem, then clean added images from the filesystem
 	if ( $self->getParamValue('imageStoreType') eq "filesystem" ) {
@@ -846,70 +837,13 @@ sub cleanData {
 	$logger->debug(
 		"cleanData. Cleaning up data services for appInstance " . "$appInstanceNum of workload $workloadNum." );
 	print $logHandle "Cleaning up data services for appInstance " . "$appInstanceNum of workload $workloadNum.\n";
-	my $nosqlHostname;
-	my $mongodbPort;
-	if ( $nosqlService->numNosqlShards == 0 ) {
-		my $nosqlService = $nosqlServersRef->[0];
-		$nosqlHostname = $nosqlService->getIpAddr();
-		$mongodbPort   = $nosqlService->portMap->{'mongod'};
-	}
-	else {
 
-		# The mongos will be running on an appServer
-		my $appServersRef = $self->appInstance->getActiveServicesByType("appServer");
-		my $appServerRef = $appServersRef->[0];
-		$nosqlHostname = $appServerRef->getIpAddr();
-		$mongodbPort   = $appServerRef->portMap->{'mongos'};
-	}
-
-	my $mongodbReplicaSet = "$nosqlHostname:$mongodbPort";
-	if ( $nosqlService->numNosqlReplicas > 0 ) {
-		for ( my $i = 1 ; $i <= $#{$nosqlServersRef} ; $i++ ) {
-			my $nosqlService = $nosqlServersRef->[$i];
-			$nosqlHostname = $nosqlService->getIpAddr();
-			$mongodbPort   = $nosqlService->portMap->{'mongod'};
-			$mongodbReplicaSet .= ",$nosqlHostname:$mongodbPort";
-		}
-	}
-
-	my $dbServicesRef = $self->appInstance->getActiveServicesByType("dbServer");
-	my $dbService     = $dbServicesRef->[0];
-	my $dbHostname    = $dbService->getIpAddr();
-	my $dbPort        = $dbService->portMap->{ $dbService->getImpl() };
-
-	my $dbLoaderOptions = "";
-	if ( $self->getParamValue('dbLoaderEnableJprofiler') ) {
-		$dbLoaderOptions .=
-		  " -agentpath:/opt/jprofiler7/bin/linux-x64/libjprofilerti.so=port=8849,nowait -XX:MaxPermSize=400m ";
-	}
-
-	my $dbPrepOptions = " -a $auctions ";
-	$dbPrepOptions .= " -m " . $nosqlService->numNosqlShards . " ";
-	$dbPrepOptions .= " -p " . $nosqlService->numNosqlReplicas . " ";
-
-	my $maxDuration = $self->getParamValue('maxDuration');
-	my $steadyState = $self->getParamValue('steadyState');
-	$dbPrepOptions .= " -f " . max( $maxDuration, $steadyState ) . " ";
-
-	$dbPrepOptions .= " -u " . $users . " ";
-
-	my $heap             = $self->getParamValue('dbLoaderHeap');
-	my $sshConnectString = $self->host->sshConnectString;
-	my $cmdString =
-"$sshConnectString \"java -Xms$heap -Xmx$heap -client $dbLoaderOptions -cp $dbLoaderClasspath -Dspring.profiles.active='$springProfilesActive' -DDBHOSTNAME=$dbHostname -DDBPORT=$dbPort -DMONGODB_HOST=$nosqlHostname -DMONGODB_PORT=$mongodbPort -DMONGODB_REPLICA_SET=$mongodbReplicaSet com.vmware.weathervane.auction.dbloader.DBPrep $dbPrepOptions 2>&1\"";
-	$logger->debug(
-		"cleanData. Running dbPrep to clean data for workload ",
-		$workloadNum, " appInstance ",
-		$appInstanceNum, ". The command line is: ", $cmdString
-	);
-	print $logHandle $cmdString . "\n";
-	my $cmdOut = `$cmdString`;
-	$logger->debug(
-		"cleanData. Ran dbPrep to clean data for workload ",
-		$workloadNum, " appInstance ",
-		$appInstanceNum, ". The output is: ", $cmdOut
-	);
-	print $logHandle $cmdOut;
+	print $applog "Exec-ing perl /cleanData.pl  in container $name\n";
+	$logger->debug("Exec-ing perl /cleanData.pl  in container $name");
+	my $dockerHostString  = $self->host->dockerHostString;	
+	my $cmdOut = `$dockerHostString docker exec $name perl /cleanData.pl`;
+	print $applog "Output: $cmdOut, \$? = $?\n";
+	$logger->debug("Output: $cmdOut, \$? = $?");
 
 	if ($?) {
 		$console_logger->error(
