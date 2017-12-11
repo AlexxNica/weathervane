@@ -199,6 +199,7 @@ sub prepareData {
 	my $logger         = get_logger("Weathervane::DataManager::AuctionDataManager");
 	my $workloadNum    = $self->getParamValue('workloadNum');
 	my $appInstanceNum = $self->getParamValue('appInstanceNum');
+	my $name        = $self->getParamValue('dockerName');
 	my $reloadDb       = $self->getParamValue('reloadDb');
 	my $appInstance    = $self->appInstance;
 	my $retVal         = 0;
@@ -304,24 +305,6 @@ sub prepareData {
 		}
 	}
 
-	my $springProfilesActive = $self->appInstance->getSpringProfilesActive();
-	$springProfilesActive .= ",dbprep";
-	my $dbLoaderClasspath = $self->dbLoaderClasspath;
-
-	# if the number of auctions wasn't explicitly set, determine based on
-	# the usersPerAuctionScaleFactor
-	my $auctions = $self->getParamValue('auctions');
-	if ( !$auctions ) {
-		$auctions = ceil( $users / $self->getParamValue('usersPerAuctionScaleFactor') );
-		if ( $auctions < 4 ) {
-			$auctions = 4;
-		}
-	}
-
-	my $dbServersRef    = $self->appInstance->getActiveServicesByType('dbServer');
-	my $nosqlServersRef = $self->appInstance->getActiveServicesByType('nosqlServer');
-	my $nosqlService = $nosqlServersRef->[0];
-
 	# If the imageStore type is filesystem, then clean added images from the filesystem
 	if ( $self->getParamValue('imageStoreType') eq "filesystem" ) {
 
@@ -334,60 +317,14 @@ sub prepareData {
 
 	}
 
-	print $logHandle "Preparing auctions to be active in current run\n";
-	my $nosqlHostname;
-	my $mongodbPort;
-	if ( $nosqlService->numNosqlShards == 0 ) {
-		my $nosqlService = $nosqlServersRef->[0];
-		$nosqlHostname = $nosqlService->getIpAddr();
-		$mongodbPort   = $nosqlService->portMap->{'mongod'};
-	}
-	else {
-		# The mongos will be running on an appServer
-		my $appServersRef = $self->appInstance->getActiveServicesByType("appServer");
-		my $appServerRef = $appServersRef->[0];
-		$nosqlHostname = $appServerRef->getIpAddr();
-		$mongodbPort   = $appServerRef->portMap->{'mongos'};
-	}
+	print $applog "Exec-ing perl /prepareData.pl  in container $name\n";
+	$logger->debug("Exec-ing perl /prepareData.pl  in container $name");
+	my $dockerHostString  = $self->host->dockerHostString;	
+	my $cmdOut = `$dockerHostString docker exec $name perl /prepareData.pl`;
+	print $applog "Output: $cmdOut, \$? = $?\n";
+	$logger->debug("Output: $cmdOut, \$? = $?");
 
-	my $mongodbReplicaSet = "$nosqlHostname:$mongodbPort";
-	if ( $nosqlService->numNosqlReplicas > 0 ) {
-		for ( my $i = 1 ; $i <= $#{$nosqlServersRef} ; $i++ ) {
-			my $nosqlService = $nosqlServersRef->[$i];
-			$nosqlHostname = $nosqlService->getIpAddr();
-			$mongodbPort   = $nosqlService->portMap->{'mongod'};
-			$mongodbReplicaSet .= ",$nosqlHostname:$mongodbPort";
-		}
-	}
 
-	my $dbServicesRef = $self->appInstance->getActiveServicesByType("dbServer");
-	my $dbService     = $dbServicesRef->[0];
-	my $dbHostname    = $dbService->getIpAddr();
-	my $dbPort        = $dbService->portMap->{ $dbService->getImpl() };
-
-	my $dbLoaderOptions = "";
-	if ( $self->getParamValue('dbLoaderEnableJprofiler') ) {
-		$dbLoaderOptions .=
-		  " -agentpath:/opt/jprofiler7/bin/linux-x64/libjprofilerti.so=port=8849,nowait -XX:MaxPermSize=400m ";
-	}
-
-	my $dbPrepOptions = " -a $auctions ";
-	$dbPrepOptions .= " -m " . $nosqlService->numNosqlShards . " ";
-	$dbPrepOptions .= " -p " . $nosqlService->numNosqlReplicas . " ";
-
-	my $maxDuration = $self->getParamValue('maxDuration');
-	my $totalTime =
-	  $self->getParamValue('rampUp') + $self->getParamValue('steadyState') + $self->getParamValue('rampDown');
-	$dbPrepOptions .= " -f " . max( $maxDuration, $totalTime ) . " ";
-	$dbPrepOptions .= " -u " . $users . " ";
-
-	my $heap             = $self->getParamValue('dbLoaderHeap');
-	my $sshConnectString = $self->host->sshConnectString;
-	my $cmdString =
-"$sshConnectString \"java -Xms$heap -Xmx$heap -client $dbLoaderOptions -cp $dbLoaderClasspath -Dspring.profiles.active='$springProfilesActive' -DDBHOSTNAME=$dbHostname -DDBPORT=$dbPort -DMONGODB_HOST=$nosqlHostname -DMONGODB_PORT=$mongodbPort -DMONGODB_REPLICA_SET=$mongodbReplicaSet com.vmware.weathervane.auction.dbloader.DBPrep $dbPrepOptions 2>&1\"";
-	print $logHandle $cmdString . "\n";
-	my $cmdOut = `$cmdString`;
-	print $logHandle $cmdOut;
 	if ($?) {
 		$console_logger->error( "Data preparation process failed.  Check PrepareData.log for more information." );
 		return 0;
