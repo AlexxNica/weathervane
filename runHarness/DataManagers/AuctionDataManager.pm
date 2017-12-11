@@ -317,11 +317,11 @@ sub prepareData {
 
 	}
 
-	print $applog "Exec-ing perl /prepareData.pl  in container $name\n";
+	print $logHandle "Exec-ing perl /prepareData.pl  in container $name\n";
 	$logger->debug("Exec-ing perl /prepareData.pl  in container $name");
 	my $dockerHostString  = $self->host->dockerHostString;	
 	my $cmdOut = `$dockerHostString docker exec $name perl /prepareData.pl`;
-	print $applog "Output: $cmdOut, \$? = $?\n";
+	print $logHandle "Output: $cmdOut, \$? = $?\n";
 	$logger->debug("Output: $cmdOut, \$? = $?");
 
 
@@ -330,8 +330,10 @@ sub prepareData {
 		return 0;
 	}
 
-	if (   ( $nosqlService->numNosqlReplicas > 0 )
-		&& ( $nosqlService->numNosqlShards == 0 ) )
+	my $nosqlServersRef = $self->appInstance->getActiveServicesByType('nosqlServer');
+	my $nosqlServerRef = $nosqlServersRef->[0];
+	if (   ( $nosqlServerRef->numNosqlReplicas > 0 )
+		&& ( $nosqlServerRef->numNosqlShards == 0 ) )
 	{
 		$console_logger->info("Waiting for MongoDB Replicas to finish synchronizing.");
 		waitForMongodbReplicaSync( $self, $logHandle );
