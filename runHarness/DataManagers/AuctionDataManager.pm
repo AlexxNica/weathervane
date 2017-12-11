@@ -74,6 +74,7 @@ sub startAuctionDataManagerContainer {
 	# Calculate the values for the environment variables used by the auctiondatamanager container
 	my %envVarMap;
 	$envVarMap{"USERSPERAUCTIONSCALEFACTOR"} = $self->getParamValue('usersPerAuctionScaleFactor');	
+	$envVarMap{"USERS"} = $users;	
 	$envVarMap{"MAXUSERS"} = $self->getParamValue('maxUsers');	
 	$envVarMap{"WORKLOADNUM"} = $workloadNum;	
 	$envVarMap{"APPINSTANCENUM"} = $appInstanceNum;	
@@ -212,6 +213,7 @@ sub prepareData {
 	$console_logger->info(
 		"Configuring and starting data services for appInstance $appInstanceNum of workload $workloadNum.\n" );
 	$logger->debug("prepareData users = $users, logPath = $logPath");
+	print $logHandle "prepareData users = $users, logPath = $logPath\n";
 
 	# Start the data services
 	if ($reloadDb) {
