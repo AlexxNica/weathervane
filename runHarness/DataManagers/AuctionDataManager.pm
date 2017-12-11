@@ -799,6 +799,7 @@ sub cleanData {
 	my $logger         = get_logger("Weathervane::DataManager::AuctionDataManager");
 	my $workloadNum    = $self->getParamValue('workloadNum');
 	my $appInstanceNum = $self->getParamValue('appInstanceNum');
+	my $name        = $self->getParamValue('dockerName');
 
 	my $appInstance = $self->appInstance;
 	my $retVal      = 0;
@@ -838,11 +839,11 @@ sub cleanData {
 		"cleanData. Cleaning up data services for appInstance " . "$appInstanceNum of workload $workloadNum." );
 	print $logHandle "Cleaning up data services for appInstance " . "$appInstanceNum of workload $workloadNum.\n";
 
-	print $applog "Exec-ing perl /cleanData.pl  in container $name\n";
+	print $logHandle "Exec-ing perl /cleanData.pl  in container $name\n";
 	$logger->debug("Exec-ing perl /cleanData.pl  in container $name");
 	my $dockerHostString  = $self->host->dockerHostString;	
 	my $cmdOut = `$dockerHostString docker exec $name perl /cleanData.pl`;
-	print $applog "Output: $cmdOut, \$? = $?\n";
+	print $logHandle "Output: $cmdOut, \$? = $?\n";
 	$logger->debug("Output: $cmdOut, \$? = $?");
 
 	if ($?) {
@@ -852,6 +853,8 @@ sub cleanData {
 		return 0;
 	}
 
+	my $nosqlServersRef = $self->appInstance->getActiveServicesByType('nosqlServer');
+	my $nosqlService = $nosqlServersRef->[0];
 	if (   ( $nosqlService->numNosqlReplicas > 0 )
 		&& ( $nosqlService->numNosqlShards == 0 ) )
 	{
