@@ -920,9 +920,8 @@ sub startAuctionWorkloadDriverContainer {
 	my $cmd        = "";
 	my $entryPoint = "";
 	my $dockerConfigHashRef = {};	
-	if ($driver->getParamValue('dockerNet')) {
-		$dockerConfigHashRef->{'net'} = $driver->getParamValue('dockerNet');
-	}
+	$dockerConfigHashRef->{'net'} = "host";
+
 	if ($driver->getParamValue('dockerCpus')) {
 		$dockerConfigHashRef->{'cpus'} = $driver->getParamValue('dockerCpus');
 	}
@@ -983,7 +982,7 @@ sub initializeRun {
 	my $port = $self->portMap->{'http'};
 	my $workloadNum    = $self->getParamValue('workloadNum');
 
-	my $logName = "$logDir/InitializeRun_$suffix.log";
+	my $logName = "$logDir/InitializeRun$suffix.log";
 	my $logHandle;
 	open( $logHandle, ">$logName" ) or do {
 		$console_logger->error("Error opening $logName:$!");
@@ -1158,7 +1157,7 @@ sub startRun {
 	my $workloadProfileHome     = $self->getParamValue('workloadProfileDir');
 	my $workloadNum             = $self->getParamValue('workloadNum');
 
-	my $logName = "$logDir/StartRun_$suffix.log";
+	my $logName = "$logDir/StartRun$suffix.log";
 	my $logHandle;
 	open( $logHandle, ">$logName" ) or do {
 		$console_logger->error("Error opening $logName:$!");
