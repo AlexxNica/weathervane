@@ -152,8 +152,8 @@ runAndLog($fileout, "cd ./dockerImages/tomcat/apache-tomcat-auction1/webapps/auc
 # workload driver
 runAndLog($fileout, "rm -f ./dockerImages/auctionworkloaddriver/workloadDriver.jar");
 runAndLog($fileout, "rm -rf ./dockerImages/auctionworkloaddriver/workloadDriverLibs");
-runAndLog($fileout, "cp ./dist/workloadDriver.jar ./dockerImages/auctiondatamanager/workloadDriver.jar");
-runAndLog($fileout, "cp -r ./dist/workloadDriverLibs ./dockerImages/auctiondatamanager/workloadDriverLibs");
+runAndLog($fileout, "cp ./dist/workloadDriver.jar ./dockerImages/auctionworkloaddriver/workloadDriver.jar");
+runAndLog($fileout, "cp -r ./dist/workloadDriverLibs ./dockerImages/auctionworkloaddriver/workloadDriverLibs");
 
 # data manager
 runAndLog($fileout, "rm -f ./dockerImages/auctiondatamanager/dbLoader.jar");
