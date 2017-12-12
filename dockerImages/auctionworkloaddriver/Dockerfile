@@ -2,8 +2,8 @@ FROM namespace/weathervane-centos7:version
 MAINTAINER hrosenbe@vmware.com
 
 COPY entrypoint.sh /entrypoint.sh
-COPY dbLoader.jar /workloadDriver.jar
-COPY dbLoaderLibs /workloadDriverLibs
+COPY workloadDriver.jar /workloadDriver.jar
+COPY workloadDriverLibs /workloadDriverLibs
 	
 RUN yum install -y java-1.8.0-openjdk && \
 	yum install -y java-1.8.0-openjdk-devel && \
