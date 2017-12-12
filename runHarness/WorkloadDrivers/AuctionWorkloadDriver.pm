@@ -963,11 +963,11 @@ sub startAuctionWorkloadDriverContainer {
 }
 
 sub stopAuctionWorkloadDriverContainer {
-	my ( $self, $applog ) = @_;
+	my ( $self, $applog, $driver ) = @_;
 	my $logger         = get_logger("Weathervane::WorkloadDrivers::AuctionWorkloadDriver");
-	my $name        = $self->getParamValue('dockerName');
+	my $name        = $driver->getParamValue('dockerName');
 
-	$self->host->dockerStopAndRemove( $applog, $name );
+	$driver->host->dockerStopAndRemove( $applog, $name );
 
 }
 
@@ -1161,22 +1161,8 @@ sub startRun {
 
 	my $port = $self->portMap->{'http'};
 
-	# get the pid of the java process
-	my $sshConnectString = $self->host->sshConnectString;
-	my $pid;
-	my $out = `$sshConnectString ps x`;
-	$logger->debug("Looking for pid of driver$suffix: $out");
-	if ( $out =~ /^\s*(\d+)\s\?.*\d\d\sjava.*-DwkldNum=$workloadNum.*WorkloadDriverApplication/m ) {
-		$pid = $1;
-		$logger->debug("Found pid $pid for workload driver$suffix");
-	}
-	else {
-		$logger->error("Can't find pid for workload driver$suffix");
-		return 0;
-	}
-
 	# open a pipe to follow progress
-	my $pipeString = "$sshConnectString \"tail -f --pid=$pid /tmp/run$suffix.log\" |";
+	my $pipeString = "$sshConnectString \"tail -f /tmp/run$suffix.log\" |";
 	$logger->debug("Command to follow workload progress: $pipeString");
 	open my $driverPipe, "$pipeString"
 	  or die "Can't fork to follow driver at /tmp/run$suffix.log : $!";
@@ -1382,6 +1368,12 @@ sub startRun {
 					return 0;
 				}
 			}
+			
+			# Now stop and remove all of the driver containers
+			foreach my $driver (@$driversRef) {
+				$self->stopAuctionWorkloadDriverContainer($applog, $driver);
+			}
+			
 			last;
 		}
 
