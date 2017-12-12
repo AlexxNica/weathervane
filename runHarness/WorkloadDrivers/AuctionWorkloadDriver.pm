@@ -910,7 +910,7 @@ sub startAuctionWorkloadDriverContainer {
 	}
 	my %envVarMap;
 	$envVarMap{"PORT"} = $port;	
-	$envVarMap{"JVMOPTS"} = $driverJvmOpts;	
+	$envVarMap{"JVMOPTS"} = "\"$driverJvmOpts\"";	
 	$envVarMap{"WORKLOADNUM"} = $workloadNum;	
 	
 	# Start the  auctionworkloaddriver container
