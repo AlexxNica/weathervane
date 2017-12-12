@@ -820,7 +820,8 @@ override 'redeploy' => sub {
 sub killOld {
 	my ($self, $setupLogDir)           = @_;
 	my $logger           = get_logger("Weathervane::WorkloadDrivers::AuctionWorkloadDriver");
-	my $workloadNum    = $driver->getParamValue('workloadNum');
+	my $workloadNum    = $self->getParamValue('workloadNum');
+	my $console_logger = get_logger("Console");
 
 	my $logName = "$setupLogDir/killOld$workloadNum.log";
 	my $logHandle;
