@@ -809,7 +809,11 @@ override 'redeploy' => sub {
 		}
 	}
 
-	# Future: When workload driver is dockerized, need to update the docker image here
+	# Update the docker image here
+	$self->host->dockerPull( $logfile, "auctionworkloaddriver");
+	foreach my $server (@$secondariesRef) {
+		$server->host->dockerPull( $logfile, "auctionworkloaddriver");	
+	}
 
 };
 
