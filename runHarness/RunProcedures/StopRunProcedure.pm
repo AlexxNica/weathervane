@@ -55,7 +55,7 @@ override 'run' => sub {
 	close $ps;
 
 	$console_logger->info("Stopping running workload-drivers");
-	$self->killOldWorkloadDrivers($setupLogDir);
+	$self->killOldWorkloadDrivers("/tmp");
 
 	## stop the services
 	my @tiers = qw(frontend backend data infrastructure);
