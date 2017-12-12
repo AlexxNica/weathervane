@@ -818,40 +818,31 @@ override 'redeploy' => sub {
 };
 
 sub killOld {
-	my ($self)           = @_;
+	my ($self, $setupLogDir)           = @_;
 	my $logger           = get_logger("Weathervane::WorkloadDrivers::AuctionWorkloadDriver");
-	my $sshConnectString = $self->host->sshConnectString;
+	my $workloadNum    = $driver->getParamValue('workloadNum');
 
+	my $logName = "$setupLogDir/killOld$workloadNum.log";
+	my $logHandle;
+	open( $logHandle, ">$logName" ) or do {
+		$console_logger->error("Error opening $logName:$!");
+		return 0;
+	};
+
+	# Create a list of all of the workloadDriver nodes including the primary
+	my $driversRef     = [];
 	my $secondariesRef = $self->secondaries;
-	my $hostname       = $self->host->hostName;
-	$logger->debug("killOld");
-	my $cmdOut = `$sshConnectString jps`;
-	$logger->debug("killOld: jps output: $cmdOut");
-	my @cmdOut = split /\n/, $cmdOut;
-	foreach $cmdOut (@cmdOut) {
-		$logger->debug("killOld: jps output line: $cmdOut");
-		if ( $cmdOut =~ /^(\d+)\s+WorkloadDriverApplication/ ) {
-			$logger->debug("killOld: killing pid $1");
-			`ssh  -o 'StrictHostKeyChecking no'  root\@$hostname kill -9 $1`;
-		}
-	}
-
-	# Make sure that no previous Benchmark processes are still running
 	foreach my $secondary (@$secondariesRef) {
-		my $hostname = $secondary->host->hostName;
+		push @$driversRef, $secondary;
+	}
+	push @$driversRef, $self;
 
-		$cmdOut = `ssh  -o 'StrictHostKeyChecking no'  root\@$hostname jps`;
-		$logger->debug("killOld: secondary $hostname jps output: $cmdOut");
-		@cmdOut = split /\n/, $cmdOut;
-		foreach $cmdOut (@cmdOut) {
-			$logger->debug("killOld: secondary $hostname jps output line: $cmdOut");
-			if ( $cmdOut =~ /^(\d+)\s+WorkloadDriverApplication/ ) {
-				$logger->debug("killOld: secondary $hostname jps killing pid $1");
-				`ssh  -o 'StrictHostKeyChecking no'  root\@$hostname kill -9 $1 2>&1`;
-			}
-		}
+	# Now stop and remove all of the driver containers
+	foreach my $driver (@$driversRef) {
+		$self->stopAuctionWorkloadDriverContainer($logHandle, $driver);
 	}
 
+	close $logHandle;
 }
 
 sub clearResults {
