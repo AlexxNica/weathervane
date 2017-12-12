@@ -1000,6 +1000,7 @@ sub initializeRun {
 	foreach my $secondary (@$secondariesRef) {
 		my $pid              = fork();
 		if ( $pid == 0 ) {
+			my $hostname = $secondary->host->hostName;
 			$logger->debug("Starting secondary driver for workload $workloadNum on $hostname");
 			$self->startAuctionWorkloadDriverContainer($secondary, $logHandle);
 			my $secondaryName        = $secondary->getParamValue('dockerName');
