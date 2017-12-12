@@ -1447,6 +1447,7 @@ $parameters{"dockerServiceImages"} = {
 		"zookeeper"  => "weathervane-zookeeper",
 		"webConfig"  => "weathervane-configurationmanager",
 		"auctiondatamanager"  => "weathervane-auctiondatamanager",
+		"auctionworkloaddriver"  => "weathervane-auctionworkloaddriver",
 	},
 	"parent"    => "host",
 	"usageText" => "",
