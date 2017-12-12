@@ -976,8 +976,10 @@ sub initializeRun {
 	my $console_logger = get_logger("Console");
 	my $logger         = get_logger("Weathervane::WorkloadDrivers::AuctionWorkloadDriver");
 	$self->suffix($suffix);
+	my $port = $driver->portMap->{'http'};
+	my $workloadNum    = $driver->getParamValue('workloadNum');
 
-	my $logName = "$logPath/InitializeRun_$suffix.log";
+	my $logName = "$logDir/InitializeRun_$suffix.log";
 	my $logHandle;
 	open( $logHandle, ">$logName" ) or do {
 		$console_logger->error("Error opening $logName:$!");
@@ -1009,7 +1011,7 @@ sub initializeRun {
 	# start the primary
 	my $pid              = fork();
 	if ( $pid == 0 ) {
-		$logger->debug("Running primary driver for workload $workloadNum: $cmdString");
+		$logger->debug("Starting primary driver for workload $workloadNum");
 		$self->startAuctionWorkloadDriverContainer($self, $logHandle);
 		my $name        = $self->getParamValue('dockerName');
 		$self->host->dockerFollowLogs($logHandle, $self, "$logDir/run$suffix.log" );
@@ -1162,10 +1164,10 @@ sub startRun {
 	my $port = $self->portMap->{'http'};
 
 	# open a pipe to follow progress
-	my $pipeString = "$sshConnectString \"tail -f /tmp/run$suffix.log\" |";
+	my $pipeString = "tail -f $logDir/run$suffix.log |";
 	$logger->debug("Command to follow workload progress: $pipeString");
 	open my $driverPipe, "$pipeString"
-	  or die "Can't fork to follow driver at /tmp/run$suffix.log : $!";
+	  or die "Can't fork to follow driver at $logDir/run$suffix.log : $!";
 
 	my $json = JSON->new;
 	$json = $json->relaxed(1);
