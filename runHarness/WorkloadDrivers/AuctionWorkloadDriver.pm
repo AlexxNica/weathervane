@@ -976,8 +976,8 @@ sub initializeRun {
 	my $console_logger = get_logger("Console");
 	my $logger         = get_logger("Weathervane::WorkloadDrivers::AuctionWorkloadDriver");
 	$self->suffix($suffix);
-	my $port = $driver->portMap->{'http'};
-	my $workloadNum    = $driver->getParamValue('workloadNum');
+	my $port = $self->portMap->{'http'};
+	my $workloadNum    = $self->getParamValue('workloadNum');
 
 	my $logName = "$logDir/InitializeRun_$suffix.log";
 	my $logHandle;
@@ -1152,6 +1152,14 @@ sub startRun {
 	my $weathervaneWorkloadHome = $self->getParamValue('workloadDriverDir');
 	my $workloadProfileHome     = $self->getParamValue('workloadProfileDir');
 	my $workloadNum             = $self->getParamValue('workloadNum');
+
+	my $logName = "$logDir/StartRun_$suffix.log";
+	my $logHandle;
+	open( $logHandle, ">$logName" ) or do {
+		$console_logger->error("Error opening $logName:$!");
+		return 0;
+	};
+
 
 	# Create a list of all of the workloadDriver nodes including the primary
 	my $driversRef     = [];
@@ -1373,7 +1381,7 @@ sub startRun {
 			
 			# Now stop and remove all of the driver containers
 			foreach my $driver (@$driversRef) {
-				$self->stopAuctionWorkloadDriverContainer($applog, $driver);
+				$self->stopAuctionWorkloadDriverContainer($logHandle, $driver);
 			}
 			
 			last;
@@ -1386,8 +1394,11 @@ sub startRun {
 		$driver->unRegisterPortsWithHost();
 	}
 
+	close $logHandle;
+
 	my $impl = $self->getParamValue('workloadImpl');
 	$console_logger->info("Workload $workloadNum: $impl finished");
+
 	return 1;
 }
 
