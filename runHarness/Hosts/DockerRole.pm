@@ -563,7 +563,7 @@ sub dockerFollowLogs {
 	my $logger = get_logger("Weathervane::Hosts::DockerRole");
 	
 	my $dockerHostString  = $self->dockerHostString;
-	$logger->debug("dockerFollowLogs name = $name, outfile = $outfile, dockerHostString = $dockerHostString");
+	$logger->debug("dockerFollowLogs name = $name, outfile = $outFile, dockerHostString = $dockerHostString");
 	
 	if ($self->dockerExists($logFileHandle, $name)) {
 		my $out = `$dockerHostString docker logs --follow $name 2>&1 > $outFile`;
