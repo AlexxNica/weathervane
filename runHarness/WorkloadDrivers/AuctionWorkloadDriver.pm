@@ -1243,7 +1243,8 @@ sub startRun {
 	}
 	my $nextIsRampup = 0;
 	my $startTime    = time();
-	while ( my $inline = <$driverPipe> ) {
+	my $inline;
+	while ( $driverPipe->opened() &&  ($inline = <$driverPipe>) ) {
 		if ( $inline =~ /^\|/ ) {
 			if ( $self->getParamValue('showPeriodicOutput') ) {
 				print $periodicOutputId . $inline;
