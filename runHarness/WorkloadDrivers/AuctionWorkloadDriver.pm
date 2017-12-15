@@ -1380,11 +1380,11 @@ sub startRun {
 				$self->stopAuctionWorkloadDriverContainer($logHandle, $driver);
 			}
 			
+			close $driverPipe;
 			last;
 		}
 
 	}
-	close $driverPipe;
 
 	foreach my $driver (@$driversRef) {
 		$driver->unRegisterPortsWithHost();
