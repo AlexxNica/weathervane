@@ -54,7 +54,7 @@ GetOptions('help' => \$help,
 			'private!' => \$private
 			);
 
-my @imageNames = qw(centos7 auctiondatamanager auctionworkloaddriver haproxy mongodb nginx postgresql rabbitmq zookeeper configurationmanager tomcat);
+my @imageNames = qw(centos7 runharness auctiondatamanager auctionworkloaddriver haproxy mongodb nginx postgresql rabbitmq zookeeper configurationmanager tomcat);
 if ($#ARGV >= 0) {
 	@imageNames = @ARGV;
 }
@@ -160,6 +160,13 @@ runAndLog($fileout, "rm -f ./dockerImages/auctiondatamanager/dbLoader.jar");
 runAndLog($fileout, "rm -rf ./dockerImages/auctiondatamanager/dbLoaderLibs");
 runAndLog($fileout, "cp ./dist/dbLoader.jar ./dockerImages/auctiondatamanager/dbLoader.jar");
 runAndLog($fileout, "cp -r ./dist/dbLoaderLibs ./dockerImages/auctiondatamanager/dbLoaderLibs");
+
+# run harness
+runAndLog($fileout, "rm -f ./dockerImages/runharness/runHarness");
+runAndLog($fileout, "rm -rf ./dockerImages/runharness/weathervane.pl");
+runAndLog($fileout, "cp ./weathervane.pl ./dockerImages/runharness/weathervane.pl");
+runAndLog($fileout, "cp -r ./runHarness ./dockerImages/runharness/runHarness");
+
 
 my $version = `cat version.txt`;
 chomp($version);
