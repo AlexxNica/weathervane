@@ -869,7 +869,7 @@ sub startAuctionWorkloadDriverContainer {
 	my $logger         = get_logger("Weathervane::WorkloadDrivers::AuctionWorkloadDriver");
 	my $workloadNum    = $driver->getParamValue('workloadNum');
 	my $name        = $driver->getParamValue('dockerName');
-	
+		
 	$driver->host->dockerStopAndRemove( $applog, $name );
 
 	# Calculate the values for the environment variables used by the auctiondatamanager container
@@ -1010,7 +1010,7 @@ sub initializeRun {
 		$logger->debug("Starting primary driver for workload $workloadNum");
 		$self->startAuctionWorkloadDriverContainer($self, $logHandle);
 		my $name        = $self->getParamValue('dockerName');
-		$self->host->dockerFollowLogs($logHandle, $self, "$logDir/run$suffix.log" );
+		$self->host->dockerFollowLogs($logHandle, $name, "$logDir/run$suffix.log" );
 		exit;
 	}
 
