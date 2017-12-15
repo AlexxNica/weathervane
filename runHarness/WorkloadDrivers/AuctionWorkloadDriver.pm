@@ -1170,7 +1170,7 @@ sub startRun {
 	# open a pipe to follow progress
 	my $pipeString = "tail -f $logDir/run$suffix.log |";
 	$logger->debug("Command to follow workload progress: $pipeString");
-	open my $driverPipe, "$pipeString"
+	my $pipePid = open my $driverPipe, "$pipeString"
 	  or die "Can't fork to follow driver at $logDir/run$suffix.log : $!";
 
 	my $json = JSON->new;
@@ -1381,6 +1381,7 @@ sub startRun {
 				$self->stopAuctionWorkloadDriverContainer($logHandle, $driver);
 			}
 			
+			kill(9, $pipePid);
 			close $driverPipe;
 			$logger->debug("Closed driverPipe.  driverPipe->opened = " . $driverPipe->opened());
 		}
