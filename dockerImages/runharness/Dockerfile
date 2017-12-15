@@ -8,6 +8,7 @@ RUN yum install -y perl-App-cpanminus && \
 	yum install -y wget && \
 	yum install -y curl && \
 	yum install -y lynx && \
+	yum install -y gcc && \
 	cpanm YAML && \
 	cpanm Config::Simple && \
 	cpanm String::Util && \
