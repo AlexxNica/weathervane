@@ -1382,7 +1382,7 @@ sub startRun {
 			}
 			
 			close $driverPipe;
-			last;
+			$logger->debug("Closed driverPipe.  driverPipe->opened = " . $driverPipe->opened());
 		}
 
 	}
