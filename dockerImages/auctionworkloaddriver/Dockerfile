@@ -7,6 +7,10 @@ COPY workloadDriverLibs /workloadDriverLibs
 	
 RUN yum install -y java-1.8.0-openjdk && \
 	yum install -y java-1.8.0-openjdk-devel && \
+	yum install -y apr && \
+	yum install -y apr-devel && \
+	yum install -y apr-util && \
+	yum install -y apr-util-devel && \
     yum -y clean all && \
     chmod +x /entrypoint.sh
 
