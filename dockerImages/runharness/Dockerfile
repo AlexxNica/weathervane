@@ -7,4 +7,4 @@ COPY runHarness /runHarness
 	
 RUN chmod +x /entrypoint.sh
 
-ENTRYPOINT ["/entrypoint.sh"]
+ENTRYPOINT ["perl", "/weathervane.pl"]
