@@ -9,6 +9,7 @@ COPY configFiles /root/weathervane/configFiles
 COPY ssh /root/.ssh
 COPY Notice.txt /root/weathervane/Notice.txt
 COPY version.txt /root/weathervane/version.txt
+COPY mongodb.repo /etc/yum.repos.d/mongodb.repo
 
 ENV  JAVA_HOME /usr/lib/jvm/java-1.8.0	
 
@@ -19,6 +20,7 @@ RUN yum install -y perl-App-cpanminus && \
 	yum install -y gcc && \
 	yum install -y openssh-clients && \
 	yum install -y docker-client && \
+	yum install -y mongodb-org-shell && \
 	yum localinstall -y http://yum.postgresql.org/9.3/redhat/rhel-7-x86_64/pgdg-centos93-9.3-3.noarch.rpm && \
 	yum install -y postgresql93 && \
 	chmod -R 600 /root/.ssh && \
