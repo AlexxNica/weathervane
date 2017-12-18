@@ -164,6 +164,7 @@ runAndLog($fileout, "cp -r ./dist/dbLoaderLibs ./dockerImages/auctiondatamanager
 # run harness
 runAndLog($fileout, "rm -rf ./dockerImages/runharness/runHarness");
 runAndLog($fileout, "rm -rf ./dockerImages/runharness/dist");
+runAndLog($fileout, "rm -rf ./dockerImages/runharness/configFiles");
 runAndLog($fileout, "rm -rf ./dockerImages/runharness/workloadConfiguration");
 runAndLog($fileout, "rm -f ./dockerImages/runharness/weathervane.pl");
 runAndLog($fileout, "rm -f ./dockerImages/runharness/version.txt");
@@ -171,6 +172,7 @@ runAndLog($fileout, "cp ./weathervane.pl ./dockerImages/runharness/weathervane.p
 runAndLog($fileout, "cp ./version.txt ./dockerImages/runharness/version.txt");
 runAndLog($fileout, "cp -r ./runHarness ./dockerImages/runharness/runHarness");
 runAndLog($fileout, "cp -r ./dist ./dockerImages/runharness/dist");
+runAndLog($fileout, "cp -r ./configFiles ./dockerImages/runharness/configFiles");
 runAndLog($fileout, "cp -r ./workloadConfiguration ./dockerImages/runharness/workloadConfiguration");
 
 

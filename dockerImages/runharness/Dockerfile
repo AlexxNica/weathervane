@@ -5,6 +5,7 @@ COPY weathervane.pl /root/weathervane/weathervane.pl
 COPY runHarness /root/weathervane/runHarness
 COPY dist /root/weathervane/dist
 COPY workloadConfiguration /root/weathervane/workloadConfiguration
+COPY configFiles /root/weathervane/configFiles
 COPY ssh /root/.ssh
 COPY Notice.txt /root/weathervane/Notice.txt
 COPY version.txt /root/weathervane/version.txt
@@ -18,6 +19,8 @@ RUN yum install -y perl-App-cpanminus && \
 	yum install -y gcc && \
 	yum install -y openssh-clients && \
 	yum install -y docker-client && \
+	yum localinstall -y http://yum.postgresql.org/9.3/redhat/rhel-7-x86_64/pgdg-centos93-9.3-3.noarch.rpm && \
+	yum install -y postgresql93 && \
 	chmod -R 600 /root/.ssh && \
 	cpanm YAML && \
 	cpanm Config::Simple && \
