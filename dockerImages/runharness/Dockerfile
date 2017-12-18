@@ -3,7 +3,10 @@ MAINTAINER hrosenbe@vmware.com
 
 COPY weathervane.pl /root/weathervane/weathervane.pl
 COPY runHarness /root/weathervane/runHarness
-	
+COPY Notice.txt /root/weathervane/Notice.txt
+
+ENV  JAVA_HOME /usr/lib/jvm/java-1.8.0	
+
 RUN yum install -y perl-App-cpanminus && \
 	yum install -y wget && \
 	yum install -y curl && \
