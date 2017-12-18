@@ -5,6 +5,7 @@ COPY weathervane.pl /root/weathervane/weathervane.pl
 COPY runHarness /root/weathervane/runHarness
 COPY ssh /root/.ssh
 COPY Notice.txt /root/weathervane/Notice.txt
+COPY version.txt /root/weathervane/version.txt
 
 ENV  JAVA_HOME /usr/lib/jvm/java-1.8.0	
 
