@@ -14,7 +14,9 @@ RUN yum install -y perl-App-cpanminus && \
 	yum install -y lynx && \
 	yum install -y gcc && \
 	yum install -y openssh-clients && \
+	yum install -y docker-client && \
 	mkdir /root/weathervane/dist && \
+	chmod -R 600 /root/.ssh && \yum install
 	cpanm YAML && \
 	cpanm Config::Simple && \
 	cpanm String::Util && \
