@@ -33,7 +33,6 @@ no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
 use lib './runHarness';
 
-use Hosts::Host;
 use Factories::ServiceFactory;
 use Factories::HostFactory;
 use Factories::VIFactory;
