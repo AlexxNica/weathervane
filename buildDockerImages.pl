@@ -163,11 +163,13 @@ runAndLog($fileout, "cp -r ./dist/dbLoaderLibs ./dockerImages/auctiondatamanager
 
 # run harness
 runAndLog($fileout, "rm -f ./dockerImages/runharness/runHarness");
+runAndLog($fileout, "rm -f ./dockerImages/runharness/dist");
 runAndLog($fileout, "rm -rf ./dockerImages/runharness/weathervane.pl");
 runAndLog($fileout, "rm -rf ./dockerImages/runharness/version.txt");
 runAndLog($fileout, "cp ./weathervane.pl ./dockerImages/runharness/weathervane.pl");
 runAndLog($fileout, "cp ./weathervane.pl ./dockerImages/runharness/version.txt");
 runAndLog($fileout, "cp -r ./runHarness ./dockerImages/runharness/runHarness");
+runAndLog($fileout, "cp -r ./runHarness ./dockerImages/runharness/dist");
 
 
 my $version = `cat version.txt`;

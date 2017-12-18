@@ -3,9 +3,9 @@ MAINTAINER hrosenbe@vmware.com
 
 COPY weathervane.pl /root/weathervane/weathervane.pl
 COPY runHarness /root/weathervane/runHarness
+COPY dist /root/weathervane/dist
 COPY ssh /root/.ssh
 COPY Notice.txt /root/weathervane/Notice.txt
-COPY version.txt /root/weathervane/version.txt
 
 ENV  JAVA_HOME /usr/lib/jvm/java-1.8.0	
 
@@ -16,8 +16,7 @@ RUN yum install -y perl-App-cpanminus && \
 	yum install -y gcc && \
 	yum install -y openssh-clients && \
 	yum install -y docker-client && \
-	mkdir /root/weathervane/dist && \
-	chmod -R 600 /root/.ssh && \yum install
+	chmod -R 600 /root/.ssh && \
 	cpanm YAML && \
 	cpanm Config::Simple && \
 	cpanm String::Util && \
