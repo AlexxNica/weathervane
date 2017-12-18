@@ -4,6 +4,7 @@ MAINTAINER hrosenbe@vmware.com
 COPY weathervane.pl /root/weathervane/weathervane.pl
 COPY runHarness /root/weathervane/runHarness
 COPY dist /root/weathervane/dist
+COPY workloadConfiguration /root/weathervane/workloadConfiguration
 COPY ssh /root/.ssh
 COPY Notice.txt /root/weathervane/Notice.txt
 COPY version.txt /root/weathervane/version.txt
