@@ -168,7 +168,7 @@ runAndLog($fileout, "rm -rf ./dockerImages/runharness/workloadConfiguration");
 runAndLog($fileout, "rm -f ./dockerImages/runharness/weathervane.pl");
 runAndLog($fileout, "rm -f ./dockerImages/runharness/version.txt");
 runAndLog($fileout, "cp ./weathervane.pl ./dockerImages/runharness/weathervane.pl");
-runAndLog($fileout, "cp ./weathervane.pl ./dockerImages/runharness/version.txt");
+runAndLog($fileout, "cp ./version.txt ./dockerImages/runharness/version.txt");
 runAndLog($fileout, "cp -r ./runHarness ./dockerImages/runharness/runHarness");
 runAndLog($fileout, "cp -r ./dist ./dockerImages/runharness/dist");
 runAndLog($fileout, "cp -r ./workloadConfiguration ./dockerImages/runharness/workloadConfiguration");
