@@ -31,7 +31,7 @@ use Log::Log4perl qw(get_logger :levels);
 
 no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
-use lib '.';
+use lib '/root/weathervane/runHarness';
 
 use Factories::ServiceFactory;
 use Factories::HostFactory;

@@ -1,7 +1,6 @@
 FROM namespace/weathervane-centos7:version
 MAINTAINER hrosenbe@vmware.com
 
-COPY weathervane.pl /root/weathervane/weathervane.pl
 COPY runHarness /root/weathervane/runHarness
 COPY dist /root/weathervane/dist
 COPY workloadConfiguration /root/weathervane/workloadConfiguration
@@ -40,4 +39,4 @@ RUN yum install -y perl-App-cpanminus && \
 	cpanm LWP 
 
 
-ENTRYPOINT ["perl", "/root/weathervane/weathervane.pl"]
+ENTRYPOINT ["perl", "/root/weathervane/runHarness/weathervane.pl"]
