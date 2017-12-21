@@ -1035,14 +1035,6 @@ $parameters{"instanceNum"} = {
 	"showUsage" => 0,
 };
 
-$parameters{"accept"} = {
-	"type"      => "!",
-	"default"   => JSON::false,
-	"parent"    => "",
-	"usageText" => "Specifying this parameter indicates acceptance of the COPYRIGHT and LICENSE.",
-	"showUsage" => 1,
-};
-
 $parameters{"help"} = {
 	"type"      => "!",
 	"default"   => JSON::false,

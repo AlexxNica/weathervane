@@ -206,42 +206,6 @@ if ( getParamValue( $paramsHashRef, "loggers" ) ) {
 
 my $logger = get_logger("Weathervane");
 
-# Force acceptance of the license if not using the accept parameter
-sub forceLicenseAccept {
-	open( my $fileout, "$weathervaneHome/Notice.txt" ) or die "Can't open file $weathervaneHome/Notice.txt: $!\n";
-	while ( my $inline = <$fileout> ) {
-		print $inline;
-	}
-
-	print "Do you accept these terms and conditions (yes/no)? ";
-	my $answer = <STDIN>;
-	chomp($answer);
-	$answer = lc($answer);
-	while ( ( $answer ne "yes" ) && ( $answer ne "no" ) ) {
-		print "Please answer yes or no: ";
-		$answer = <STDIN>;
-		chomp($answer);
-		$answer = lc($answer);
-	}
-	if ( $answer eq "yes" ) {
-		open( my $file, ">$weathervaneHome/.accept-weathervane" ) or die "Can't create file $weathervaneHome/.accept-weathervane: $!\n";
-		close $file;
-	}
-	else {
-		exit -1;
-	}
-}
-unless ( -e "$weathervaneHome/.accept-weathervane" ) {
-	my $accept = getParamValue( $paramsHashRef, "accept" );
-	if ($accept) {
-		open( my $file, ">$weathervaneHome/.accept-weathervane" ) or die "Can't create file $weathervaneHome/.accept-weathervane: $!\n";
-		close $file;
-	}
-	else {
-		forceLicenseAccept();
-	}
-}
-
 # set the run length parameters properly
 my $runLength   = getParamValue( $paramsHashRef, "runLength" );
 my $rampUp      = getParamValue( $paramsHashRef, "rampUp" );
