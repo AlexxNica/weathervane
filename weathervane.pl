@@ -25,15 +25,34 @@ my $accept = '';
 my $configFile = 'weathervane.config';
 my $version = '1.1.0';
 my $outputDir = 'output';
+my $tmpDir = 'tmpLog';
 my $dockerNamespace = '';
 
 GetOptions(	'accept=s' => \$accept,
 			'configFile=s' => \$configFile,
 			'version=s' => \$version,
 			'output=s' => \$outputDir,
+			'tmpDir=s' => \$tmpDir,
 			'dockerNamespace=s' => \$dockerNamespace,
 		);
-			
+		
+sub dockerExists {
+	my ( $name ) = @_;
+	
+	my $out = `docker ps -a`;
+	
+	my @lines = split /\n/, $out;
+	my $found = 0;
+	foreach my $line (@lines) {	
+		if ($line =~ /\s+$name\s*$/) {
+			$found = 1;
+			last;
+		}
+	}
+
+	return $found;
+}
+	
 # Force acceptance of the license if not using the accept parameter
 sub forceLicenseAccept {
 	open( my $fileout, "./Notice.txt" ) or die "Can't open file ./Notice.txt: $!\n";
@@ -80,7 +99,8 @@ if (!(-f $configFile)) {
 # then make it an absolute path relative to the local dir
 if (!($configFile =~ /\//)) {
 	my $pwd = `pwd`;
-	$configFile .= "$pwd/";	
+	chomp($pwd);
+	$configFile = "$pwd/$configFile";	
 }
 
 if (!(-e $outputDir)) {
@@ -93,11 +113,40 @@ if (!(-d $outputDir)) {
 # then make it an absolute path relative to the local dir
 if (!($outputDir =~ /\//)) {
 	my $pwd = `pwd`;
-	$outputDir .= "$pwd/";	
+	chomp($pwd);
+	$outputDir = "$pwd/$outputDir";	
+}
+
+if (!(-e $tmpDir)) {
+	`mkdir -p $tmpDir`;
+}
+if (!(-d $tmpDir)) {
+	die "The Weathervane output directory $tmpDir must be a directory.";
+}
+# If the tmpDir does not reference a directory with an absolute path, 
+# then make it an absolute path relative to the local dir
+if (!($tmpDir =~ /\//)) {
+	my $pwd = `pwd`;
+	chomp($pwd);
+	$tmpDir = "$pwd/$tmpDir";	
 }
 
 if (!$dockerNamespace) {
 	die "You must provide a namespace for the Docker images using the --dockerNamespace parameter."
 }
 
-`docker run --rm -t -w /root/weathervane  -v $configFile:/root/weathervane/weathervane.config -v $outputDir:/root/weathervane/output $dockerNamespace/weathervane-runharness:$version`;
+if (dockerExists("weathervane")) {
+    `docker rm -vf weathervane`;
+}
+
+my $cmdString = "docker run --name weathervane --rm -d -w /root/weathervane  -v $configFile:/root/weathervane/weathervane.config -v $tmpDir:/root/weathervane/tmpLog -v $outputDir:/root/weathervane/output $dockerNamespace/weathervane-runharness:$version";
+my $dockerId = `$cmdString`;
+
+my $pipeString = "docker logs --follow weathervane |";
+my $pipePid = open my $driverPipe, "$pipeString"
+	  or die "Can't open docker logs pipe ($pipeString) : $!";
+
+my $inline;
+while ( $driverPipe->opened() &&  ($inline = <$driverPipe>) ) {
+    print $inline;
+}
