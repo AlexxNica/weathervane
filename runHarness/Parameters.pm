@@ -1236,20 +1236,6 @@ $parameters{"stopServices"} = {
 	"usageText" => "",
 	"showUsage" => 0,
 };
-$parameters{"restartNtp"} = {
-	"type"      => "!",
-	"default"   => 0,
-	"parent"    => "runProc",
-	"usageText" => "",
-	"showUsage" => 1,
-};
-$parameters{"harnessHostNtpServer"} = {
-	"type"      => "!",
-	"default"   => 0,
-	"parent"    => "host",
-	"usageText" => "",
-	"showUsage" => 1,
-};
 
 $parameters{"configFile"} = {
 	"type"    => "=s",
